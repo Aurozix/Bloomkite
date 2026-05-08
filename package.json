@@ -1,0 +1,43 @@
+{
+  "name": "bloomkite",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "ts-node scripts/migrate.ts",
+    "db:seed": "ts-node database/seed.ts",
+    "db:seed:mandatory": "ts-node database/seed.ts",
+    "db:seed:optional": "ts-node database/seed.ts --expanded",
+    "db:seed:expanded": "ts-node database/seed.ts --expanded"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.3",
+    "@types/node": "^25.6.2",
+    "@types/react": "^19.2.14",
+    "autoprefixer": "^10.5.0",
+    "dotenv": "^16.3.1",
+    "next": "^14.2.35",
+    "postcss": "^8.5.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.8",
+    "pg": "^8.11.3",
+    "ts-node": "^10.9.2",
+    "ws": "^8.15.0"
+  }
+}
