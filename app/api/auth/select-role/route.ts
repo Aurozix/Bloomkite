@@ -51,6 +51,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Update user metadata to set current_role
+    try {
+      const { data, error } = await supabase.auth.admin.getUserById(userId);
+      if (!error && data?.user) {
+        await supabase.auth.admin.updateUserById(userId, {
+          user_metadata: {
+            ...(data.user.user_metadata || {}),
+            current_role: role,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Error setting current_role:", err);
+    }
+
     // Create or update profile based on role
     if (role === "investor") {
       const { error: profileError } = await supabase

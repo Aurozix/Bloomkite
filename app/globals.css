@@ -122,6 +122,26 @@ body {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(to right, var(--primary-600), var(--secondary-600));
   }
+
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-pending {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-approved {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-rejected {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-published {
+    @apply badge bg-green-100 text-green-800;
+  }
 }
 
 /* Smooth transitions */

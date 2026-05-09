@@ -53,10 +53,14 @@ export async function GET(request: NextRequest) {
 
     const roles = userRoles?.map((ur: any) => ur.role?.name).filter(Boolean) || []
 
+    // Get current role from metadata, default to first role
+    const currentRole = user.user_metadata?.current_role || roles[0] || null
+
     return NextResponse.json({
       user: {
         ...user,
         roles,
+        current_role: currentRole,
         investor_profile: investorProfile,
         advisor_profile: advisorProfile,
       },

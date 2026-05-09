@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalculatorIcon,
-  TrendingUpIcon,
+  ArrowTrendingUpIcon,
   CurrencyDollarIcon,
   StarIcon,
   ShieldCheckIcon,
@@ -24,7 +24,7 @@ const calculators: Calculator[] = [
     id: 'goal-planner',
     name: 'Goal Planner',
     description: 'Calculate how much you need to save monthly to reach your financial goals',
-    icon: TrendingUpIcon,
+    icon: ArrowTrendingUpIcon,
     path: '/calculators/goal-planner',
   },
   {
