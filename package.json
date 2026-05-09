@@ -9,6 +9,12 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --testPathPattern=__tests__/unit",
+    "test:integration": "jest --testPathPattern=__tests__/integration",
+    "e2e": "playwright test",
     "db:migrate": "ts-node scripts/migrate.ts",
     "db:seed": "ts-node database/seed.ts",
     "db:seed:mandatory": "ts-node database/seed.ts",
@@ -36,8 +42,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/jest": "^30.0.0",
     "@types/pg": "^8.11.8",
+    "@types/supertest": "^7.2.0",
+    "jest": "^30.4.2",
     "pg": "^8.11.3",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "ws": "^8.15.0"
   }

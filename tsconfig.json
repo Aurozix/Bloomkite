@@ -9,6 +9,7 @@
     ],
     "module": "esnext",
     "skipLibCheck": true,
+    "types": ["jest", "node"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
