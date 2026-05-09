@@ -4,6 +4,7 @@ import ws from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { seedMandatory } from "./seeds/001_mandatory";
 import { seedOptional } from "./seeds/002_optional";
+import { seedTestUsers } from "./seeds/003_test_users";
 
 // Load .env.local
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
@@ -20,7 +21,6 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   realtime: {
-    presence: "off",
     transport: ws as any,
   },
 });
@@ -44,6 +44,11 @@ async function seed() {
       await seedOptional(supabase);
       console.log("✅ Optional seeds completed\n");
     }
+
+    // Run test users seed
+    console.log("📋 Creating test users...");
+    await seedTestUsers(supabase);
+    console.log("✅ Test users created\n");
 
     console.log("🎉 Seed process completed successfully!");
     console.log(

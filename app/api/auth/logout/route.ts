@@ -18,18 +18,15 @@ export async function POST(request: NextRequest) {
 
     await supabase.auth.signOut()
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { success: true, message: 'Logged out successfully' },
-      {
-        status: 200,
-        headers: {
-          'Set-Cookie': [
-            'sb-access-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 UTC;',
-            'sb-refresh-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 UTC;',
-          ],
-        },
-      }
+      { status: 200 }
     )
+
+    response.cookies.set('sb-access-token', '', { maxAge: 0, path: '/' })
+    response.cookies.set('sb-refresh-token', '', { maxAge: 0, path: '/' })
+
+    return response
   } catch (error) {
     console.error('Logout error:', error)
     return NextResponse.json(

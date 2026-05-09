@@ -10,6 +10,7 @@ import {
   ShieldCheckIcon,
   UsersIcon,
   ChartBarIcon,
+  BriefcaseIcon,
 } from '@heroicons/react/24/outline'
 import { ArrowRightIcon } from '@heroicons/react/24/solid'
 
@@ -62,7 +63,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin">
-          <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+          <div className="h-12 w-12 border-4 border-t-transparent rounded-full" style={{ borderColor: 'var(--primary-600)', borderTopColor: 'transparent' }}></div>
         </div>
       </div>
     )
@@ -79,7 +80,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-b border-blue-700">
+      <header className="text-white border-b" style={{ background: 'var(--hero-gradient)', borderColor: 'var(--primary-700)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <img src="/Bloomkite.png" alt="Bloomkite" className="h-12 w-12" />
@@ -100,7 +101,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* User Card */}
-        <div className="card p-8 mb-12 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100">
+        <div className="card p-8 mb-12 border" style={{ background: `linear-gradient(to right, var(--primary-50), var(--primary-50))`, borderColor: 'var(--primary-200)' }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm font-medium">Your Account</p>
@@ -109,14 +110,15 @@ export default function Dashboard() {
                 {user.roles?.map((role) => (
                   <span
                     key={role}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg text-sm font-semibold capitalize"
+                    className="px-4 py-2 text-white rounded-lg text-sm font-semibold capitalize"
+                    style={{ background: `linear-gradient(to right, var(--primary-600), var(--primary-700))` }}
                   >
                     {role}
                   </span>
                 ))}
               </div>
             </div>
-            <UserIcon className="h-20 w-20 text-blue-600" />
+            <UserIcon className="h-20 w-20" style={{ color: 'var(--primary-600)' }} />
           </div>
         </div>
 
@@ -126,28 +128,28 @@ export default function Dashboard() {
           {isInvestor && (
             <section>
               <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-                <UserGroupIcon className="h-8 w-8 text-blue-600" />
+                <UserGroupIcon className="h-8 w-8" style={{ color: 'var(--primary-600)' }} />
                 Investor Tools
               </h2>
               <div className="grid md:grid-cols-2 gap-6">
                 <a href="/calculators" className="card p-8 hover:shadow-xl group cursor-pointer">
-                  <CalculatorIcon className="h-16 w-16 text-blue-600 mb-4 group-hover:scale-110 transition transform" />
+                  <CalculatorIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform" style={{ color: 'var(--primary-600)' }} />
                   <h3 className="text-2xl font-bold mb-3">Financial Calculators</h3>
                   <p className="text-gray-600 mb-6">
                     Access 15 powerful calculators to plan your goals, analyze cash flow, and make smart investment decisions
                   </p>
-                  <div className="flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-3 transition">
+                  <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition" style={{ color: 'var(--primary-600)' }}>
                     Explore Calculators <ArrowRightIcon className="h-5 w-5" />
                   </div>
                 </a>
 
                 <a href="/advisors" className="card p-8 hover:shadow-xl group cursor-pointer">
-                  <ShieldCheckIcon className="h-16 w-16 text-blue-600 mb-4 group-hover:scale-110 transition transform" />
+                  <ShieldCheckIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform" style={{ color: 'var(--primary-600)' }} />
                   <h3 className="text-2xl font-bold mb-3">Find Advisors</h3>
                   <p className="text-gray-600 mb-6">
                     Discover verified financial advisors, compare their expertise, and get personalized recommendations
                   </p>
-                  <div className="flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-3 transition">
+                  <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition" style={{ color: 'var(--primary-600)' }}>
                     Browse Advisors <ArrowRightIcon className="h-5 w-5" />
                   </div>
                 </a>
@@ -159,12 +161,12 @@ export default function Dashboard() {
           {isAdvisor && (
             <section>
               <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-                <BriefcaseIcon className="h-8 w-8 text-purple-600" />
+                <BriefcaseIcon className="h-8 w-8" style={{ color: 'var(--secondary-600)' }} />
                 Advisor Tools
               </h2>
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="card p-8 border-2 border-purple-200">
-                  <UserIcon className="h-16 w-16 text-purple-600 mb-4" />
+                <div className="card p-8 border-2" style={{ borderColor: 'var(--secondary-200)' }}>
+                  <UserIcon className="h-16 w-16 mb-4" style={{ color: 'var(--secondary-600)' }} />
                   <h3 className="text-2xl font-bold mb-3">My Profile</h3>
                   <p className="text-gray-600 mb-6">
                     Build and manage your professional profile to attract clients
@@ -186,18 +188,18 @@ export default function Dashboard() {
                         : 'Status Unknown'}
                     </span>
                   </div>
-                  <a href="/profile" className="text-blue-600 font-semibold hover:underline flex items-center gap-2">
+                  <a href="/profile" className="font-semibold hover:underline flex items-center gap-2" style={{ color: 'var(--primary-600)' }}>
                     Edit Profile <ArrowRightIcon className="h-4 w-4" />
                   </a>
                 </div>
 
-                <div className="card p-8 border-2 border-orange-200">
-                  <PencilSquareIcon className="h-16 w-16 text-orange-600 mb-4" />
+                <div className="card p-8 border-2" style={{ borderColor: 'var(--accent-200)' }}>
+                  <PencilSquareIcon className="h-16 w-16 mb-4" style={{ color: 'var(--accent-200)' }} />
                   <h3 className="text-2xl font-bold mb-3">Publish Articles</h3>
                   <p className="text-gray-600 mb-6">
                     Share your expertise and build authority with the Bloomkite community
                   </p>
-                  <a href="/articles/create" className="text-blue-600 font-semibold hover:underline flex items-center gap-2">
+                  <a href="/articles/create" className="font-semibold hover:underline flex items-center gap-2" style={{ color: 'var(--primary-600)' }}>
                     Create Article <ArrowRightIcon className="h-4 w-4" />
                   </a>
                 </div>
@@ -209,28 +211,28 @@ export default function Dashboard() {
           {isAdmin && (
             <section>
               <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-                <ShieldCheckIcon className="h-8 w-8 text-red-600" />
+                <ShieldCheckIcon className="h-8 w-8" style={{ color: 'var(--primary-600)' }} />
                 Admin Panel
               </h2>
               <div className="grid md:grid-cols-3 gap-6">
-                <div className="card p-8 border-2 border-red-200">
-                  <ShieldCheckIcon className="h-12 w-12 text-red-600 mb-4" />
+                <div className="card p-8 border-2" style={{ borderColor: 'var(--primary-200)' }}>
+                  <ShieldCheckIcon className="h-12 w-12 mb-4" style={{ color: 'var(--primary-600)' }} />
                   <h3 className="text-xl font-bold mb-2">Moderation</h3>
                   <p className="text-gray-600 text-sm">
                     Approve content and maintain community standards
                   </p>
                 </div>
 
-                <div className="card p-8 border-2 border-indigo-200">
-                  <UsersIcon className="h-12 w-12 text-indigo-600 mb-4" />
+                <div className="card p-8 border-2" style={{ borderColor: 'var(--secondary-200)' }}>
+                  <UsersIcon className="h-12 w-12 mb-4" style={{ color: 'var(--secondary-600)' }} />
                   <h3 className="text-xl font-bold mb-2">User Management</h3>
                   <p className="text-gray-600 text-sm">
                     Manage accounts, roles, and user permissions
                   </p>
                 </div>
 
-                <div className="card p-8 border-2 border-cyan-200">
-                  <ChartBarIcon className="h-12 w-12 text-cyan-600 mb-4" />
+                <div className="card p-8 border-2" style={{ borderColor: 'var(--accent-200)' }}>
+                  <ChartBarIcon className="h-12 w-12 mb-4" style={{ color: 'var(--accent-200)' }} />
                   <h3 className="text-xl font-bold mb-2">Analytics</h3>
                   <p className="text-gray-600 text-sm">
                     View platform metrics and performance insights

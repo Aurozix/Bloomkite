@@ -235,25 +235,109 @@ Subscription Created → Invoice Generated → Features Enabled
 - **Example**: "Net worth: ₹44L (₹77L assets - ₹33L liabilities)"
 
 **4. Priority Ranker**
-- **Purpose**: Rank multiple financial goals by priority
-- **Inputs**: Multiple goals with urgency levels
-- **Output**: Ranked list with recommended allocation
-- **Example**: "Priority 1: Emergency Fund, Priority 2: Retirement, Priority 3: Home"
+- **Purpose**: Help investors prioritize financial goals when resources are limited by ranking goals based on urgency
+- **Inputs**: Multiple financial goals, each with an urgency level (scale 1-9, where 1 = most urgent, 9 = least urgent)
+- **Processing Logic**:
+  1. Group all goals by their urgency level
+  2. Within each urgency group, sort goals alphabetically by name
+  3. Assign sequential priority rankings (1st, 2nd, 3rd, etc.)
+- **Output**: Ranked goal list with priority number, goal name, urgency level, and urgency description
+- **Example**:
+  - Emergency Fund (Urgency: 1) → Priority 1
+  - Education Fund (Urgency: 2) → Priority 2
+  - Home Purchase (Urgency: 2) → Priority 3
+  - Retirement (Urgency: 5) → Priority 4
+- **Business Rules**:
+  - Urgency level must be 1-9 (lower number = higher priority)
+  - Goals with same urgency ordered alphabetically
+  - At least one goal must be provided
+  - Urgency level 4 signals goal should be deleted/removed
+  - Output is deterministic (same inputs always produce same ranked order)
 
 **5. Insurance Needs**
-- **Purpose**: Calculate required insurance coverage
-- **Inputs**: Monthly expenses, dependents, liabilities, existing coverage
-- **Output**: Total coverage needed, gap, breakdown by insurance type
-- **Example**: "Coverage gap: ₹1.25Cr (need ₹1.5Cr, have ₹25L)"
+- **Purpose**: Determine required life insurance coverage based on income, income stability/predictability, and identify coverage gaps
+- **Inputs**: 
+  - Annual income
+  - Income stability (STABLE or FLUCTUATING)
+  - Income predictability (PREDICTABLE or UNPREDICTABLE)
+  - Existing insurance coverage
+- **Processing Logic**:
+  - Step 1: Determine coverage multiplier based on stability & predictability matrix:
+    | Stability | Predictability | Multiplier | Risk |
+    |---|---|---|---|
+    | STABLE | PREDICTABLE | 10x | Low |
+    | STABLE | UNPREDICTABLE | 15x | Medium |
+    | FLUCTUATING | PREDICTABLE | 10x | Medium |
+    | FLUCTUATING | UNPREDICTABLE | 15x | High |
+  - Step 2: Calculate required insurance = Annual Income × Multiplier
+  - Step 3: Calculate gap = Required Insurance - Existing Insurance (or 0 if existing exceeds required)
+- **Output**: Required insurance amount, coverage multiplier used, existing insurance (echoed), insurance gap
+- **Example**:
+  - Annual Income: ₹10,00,000
+  - Stability: FLUCTUATING, Predictability: UNPREDICTABLE → Multiplier: 15x
+  - Required: ₹10,00,000 × 15 = ₹1,50,00,000
+  - Existing: ₹25,00,000
+  - Gap: ₹1,50,00,000 - ₹25,00,000 = ₹1,25,00,000
+- **Business Rules**:
+  - Income must be > 0
+  - Existing insurance must be ≥ 0
+  - Multiplier determined by BOTH stability AND predictability (not just one)
+  - Gap is zero if existing insurance exceeds required
+  - All amounts based on annual income
 
 ---
 
 #### Phase 2 Calculators (5 - Weeks 7-10)
 
 **6. Risk Profiler**
-- **Purpose**: Assess investor risk tolerance
-- **Input**: Questionnaire (age, income, experience, risk appetite, time horizon)
-- **Output**: Risk score, profile (Conservative/Moderate/Aggressive), asset allocation recommendation
+- **Purpose**: Assess investor risk tolerance and deliver personalized portfolio allocation recommendations
+- **Input**: Responses to 16-question questionnaire about investment experience, knowledge, and risk tolerance
+- **Processing Logic**:
+  - Step 1: Score each answer based on risk-seeking behavior
+  - Step 2: Sum all scores to get total risk score
+  - Step 3: Map total score to risk category (0-30 Conservative ... 62+ Aggressive)
+  - Step 4: Return portfolio allocation percentages for that category
+
+**Risk Profiler Questionnaire (16 Questions)**
+
+| Q# | Question | Answers & Scores |
+|---|---|---|
+| 1 | In comparison to your peer groups, how would you rate your willingness to take risk while making financial decisions? | Very high risk: 1, High risk: 2, Moderate risk: 3, Low risk: 4, No risk: 5 |
+| 2 | How familiar are you with investment schemes and financial markets in India? | Multiple schemes experience: 1, Different returns understanding: 2, Some experience: 4, Very little/none: 5 |
+| 3 | Have you ever invested before in stock markets, mutual funds, or unit linked insurance? | Yes: 0, No: 0 → *If Yes, go to Q3A; if No, skip to Q4* |
+| 3A | How would you describe your experience with such investment schemes? *(Conditional)* | Positive, never misguided: 1, Cautious to avoid mistakes: 3, Lost money, very cautious: 5 |
+| 4 | If your investments fell 20% in 6 months, what would you do? | Buy more for growth: 1, Add to extent of loss: 2, Wait and hold: 3, Withdraw to secured schemes: 5 |
+| 5 | What is the most aggressive investment you have made? | Direct shares: 1, Mutual funds: 2, Real estate/Gold/Insurance: 3, Own home for staying: 4, Bank savings/RDs: 5 |
+| 6 | How much could your investment fall in value over 12 months before you feel concerned? | >50%: 1, Up to 50%: 2, Up to 25%: 3, Up to 10%: 4, Up to 5%: 5, Any fall: 6 |
+| 7 | How long before you would need to access your capital? | >7 years: 1, 5-7 years: 2, 3-5 years: 3, 2-3 years: 4, <2 years: 5 |
+| 8 | How much emergency fund have you set aside? | <1 month expenses: 1, 3-6 months: 3, >6 months: 5 |
+| 9 | How much risk to counteract inflation over longer term? | Comfortable with short/medium losses: 1, Conscious but limit losses: 3, Little tolerance for losses: 5 |
+| 10 | More concerned about potential gains or possible losses? | Gains: 1, Both equally: 3, Losses: 5 |
+| 11 | What return do you expect from portfolio? | 8%+ p.a.: 1, 6-8% p.a.: 2, 4-6% p.a.: 3, 2-4% p.a.: 4, 0-2% p.a.: 5 |
+| 12 | Have you experienced investment loss? How did it feel? | Unconcerned, see opportunities: 1, Unconcerned, no more investing: 2, Concerned: 3, Very concerned: 4, Never experienced: 5 |
+| 13 | What risk degree acceptable for desired return? | Maximize returns regardless: 1, High risk for large increase: 2, Moderate risk for medium increase: 3, Limited risk for slight increase: 4, Capital security required: 5 |
+| 14 | What are your income requirements from investments? | No income, growth only: 1, Small income, mainly growth: 2, Equal income & growth: 3, Large income, some growth: 4, Income only: 5 |
+| 15 | Have you borrowed to invest? | Managed funds/shares/structured: 1, Investment/rental property: 3, Never outside own home: 5 |
+| 16 | How comfortable was borrowing to invest? | Very confident: 1, Confident: 2, Concerned: 3, Very concerned: 4, Never borrowed: 5 |
+
+**Score Mapping to Risk Category**
+
+| Total Score | Risk Category | Portfolio Allocation |
+|---|---|---|
+| 0-30 | Conservative | 30% Stocks, 50% Bonds, 20% Cash |
+| 31-40 | Moderately Conservative | 40% Stocks, 45% Bonds, 15% Cash |
+| 41-51 | Moderate | 50% Stocks, 40% Bonds, 10% Cash |
+| 52-61 | Moderately Aggressive | 65% Stocks, 30% Bonds, 5% Cash |
+| 62+ | Aggressive | 80% Stocks, 15% Bonds, 5% Cash |
+
+- **Output**: Risk score (total), risk category, recommended equity %, debt %, cash %
+- **Example**: Investor scores 28 points → Conservative category → Recommend 30% Stocks, 50% Bonds, 20% Cash
+- **Business Rules**:
+  - Investor must answer all questions (no partial submissions)
+  - Each answer must be a valid choice from questionnaire
+  - Allocation percentages always sum to 100%
+  - Score range boundaries are fixed
+  - One response per investor (updates replace previous)
 
 **7. Future Value**
 - **Purpose**: How much will ₹X grow at Y% return over Z years
@@ -272,6 +356,40 @@ Subscription Created → Invoice Generated → Features Enabled
 **10. Tenure Finder**
 - **Purpose**: How long to reach a goal at given rate
 - **Example**: "₹10L to ₹50L at 10% p.a. takes 16.9 years"
+
+---
+
+---
+
+### Sprint 2 Implementation Decisions
+
+**Resolved:**
+
+1. **Insurance Needs Method** ✅
+   - **Decision**: Use **income-multiple method** (Annual Income × Stability/Predictability Multiplier)
+   - Not the expense-replacement method mentioned in earlier specs
+   - Multiplier: 10x (stable+predictable or fluctuating+predictable) or 15x (unstable+unpredictable)
+
+2. **BigDecimal Library** ✅
+   - **Decision**: Use **Decimal.js**
+   - Industry standard for financial JavaScript applications
+   - Arbitrary precision handling, proper rounding modes
+   - Rounding rule: `ROUND_HALF_UP` (standard accounting practice)
+   - Handles complex financial calculations accurately
+
+3. **Data Persistence Behavior** ✅
+   - **Decision**: Auto-save draft + explicit save pattern
+   - Calculator results auto-save as draft when user inputs values (loss-proof)
+   - Show "Draft" indicator in UI
+   - Add explicit "Save Result" button for user to finalize official result
+   - Balances UX (no data loss) with clarity (user knows when result is official)
+
+**Deferred (Future Implementation):**
+
+4. **Financial Plans Database Schema** ⏸️
+   - Exact column structure for `financial_plans` table will be defined during database implementation phase
+   - Will include: calculator type, user_id, results JSON, timestamps, draft status
+   - Design when implementing persistence layer
 
 ---
 

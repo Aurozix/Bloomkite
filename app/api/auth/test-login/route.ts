@@ -21,17 +21,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists, if not create one
+    let userId: string;
+    let userExists = false;
+
+    // Try to get user from database
     let { data: user, error: userError } = await supabase
       .from("users")
       .select("id")
       .eq("email", email)
       .single();
 
-    let userId: string;
-
     if (userError && userError.code === "PGRST116") {
-      // User doesn't exist - create test user in auth
+      // User doesn't exist in database - create test user in auth
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password: "test-password-" + Math.random().toString(36),
@@ -50,54 +51,128 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Database error" }, { status: 500 });
     } else {
       userId = user!.id;
+      userExists = true;
     }
 
-    // Get the user's session
-    const { data: sessionData, error: sessionError } =
-      await supabase.auth.admin.getUserById(userId);
+    // Assign role to user
+    const { data: roleData } = await supabase
+      .from("roles")
+      .select("id")
+      .eq("name", role)
+      .single();
 
-    if (sessionError || !sessionData.user) {
+    if (!roleData) {
       return NextResponse.json(
-        { error: "Failed to get session" },
+        { error: "Role not found" },
         { status: 500 }
       );
     }
 
-    // Generate a session
-    const { data: sessionToken, error: tokenError } =
-      await supabase.auth.admin.createSession(userId);
+    // Create or update user_roles
+    await supabase
+      .from("user_roles")
+      .upsert({
+        user_id: userId,
+        role_id: roleData.id,
+      }, { onConflict: "user_id,role_id" });
 
-    if (tokenError || !sessionToken) {
+    // Create profile if needed
+    if (role === "investor") {
+      await supabase
+        .from("investor_profiles")
+        .upsert({
+          user_id: userId,
+          display_name: email.split("@")[0],
+        }, { onConflict: "user_id" });
+    } else if (role === "advisor") {
+      await supabase
+        .from("advisor_profiles")
+        .upsert({
+          user_id: userId,
+          display_name: email.split("@")[0],
+          workflow_status: "pending",
+        }, { onConflict: "user_id" });
+    }
+
+    // Generate a magic link to establish session
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: "magiclink",
+      email: email,
+    });
+
+    if (linkError) {
+      console.error("Link generation error:", linkError);
       return NextResponse.json(
-        { error: "Failed to create session" },
+        { error: "Failed to generate session token", details: linkError.message },
         { status: 500 }
       );
     }
 
-    // Create response with auth cookies
+    const token = linkData?.properties?.hashed_token;
+    if (!token) {
+      console.error("Missing token in response:", linkData);
+      return NextResponse.json(
+        { error: "Missing token in response" },
+        { status: 500 }
+      );
+    }
+
+    // Exchange the token for a session using Supabase's verify endpoint
+    const verifyResponse = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseKey,
+      },
+      body: JSON.stringify({
+        token_hash: token,
+        type: "magiclink",
+      }),
+    });
+
+    const sessionData = await verifyResponse.json();
+    console.log("Verify response:", { status: verifyResponse.status, sessionData });
+
+    if (!verifyResponse.ok || !sessionData.access_token) {
+      console.error("Failed to verify token:", sessionData);
+      return NextResponse.json(
+        { error: "Failed to establish session", details: sessionData },
+        { status: 500 }
+      );
+    }
+
+    // Set auth cookies and return session data
     const response = NextResponse.json({
       success: true,
       message: "Test login successful",
+      session: {
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token,
+        expires_in: sessionData.expires_in,
+        expires_at: sessionData.expires_at,
+        token_type: sessionData.token_type,
+        user: sessionData.user,
+      },
+      redirect: "/auth/role-selection",
     });
 
-    // Set auth cookies
-    response.cookies.set("sb-access-token", sessionToken.session.access_token, {
+    response.cookies.set("sb-access-token", sessionData.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
     });
 
-    response.cookies.set(
-      "sb-refresh-token",
-      sessionToken.session.refresh_token,
-      {
+    if (sessionData.refresh_token) {
+      response.cookies.set("sb-refresh-token", sessionData.refresh_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-      }
-    );
+        maxAge: 60 * 60 * 24 * 30,
+        path: "/",
+      });
+    }
 
     return response;
   } catch (error) {

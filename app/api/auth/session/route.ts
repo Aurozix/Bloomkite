@@ -8,10 +8,16 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
+    const accessToken = cookieStore.get('sb-access-token')?.value
+
+    if (!accessToken) {
+      return NextResponse.json({ user: null })
+    }
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
-          cookie: cookieStore.toString(),
+          Authorization: `Bearer ${accessToken}`,
         },
       },
     })
@@ -45,10 +51,12 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
 
+    const roles = userRoles?.map((ur: any) => ur.role?.name).filter(Boolean) || []
+
     return NextResponse.json({
       user: {
         ...user,
-        roles: userRoles?.map((ur) => ur.role?.name),
+        roles,
         investor_profile: investorProfile,
         advisor_profile: advisorProfile,
       },

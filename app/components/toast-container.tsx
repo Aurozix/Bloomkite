@@ -1,7 +1,7 @@
 'use client'
 
 import { useToast } from './toast-context'
-import { XMarkIcon, CheckCircleIcon, ExclamationIcon, InformationCircleIcon } from '@heroicons/react/24/solid'
+import { XMarkIcon, CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/solid'
 
 export function ToastContainer() {
   const { toasts, removeToast } = useToast()
@@ -11,9 +11,9 @@ export function ToastContainer() {
       case 'success':
         return <CheckCircleIcon className="h-6 w-6" />
       case 'error':
-        return <ExclamationIcon className="h-6 w-6" />
+        return <ExclamationTriangleIcon className="h-6 w-6" />
       case 'warning':
-        return <ExclamationIcon className="h-6 w-6" />
+        return <ExclamationTriangleIcon className="h-6 w-6" />
       case 'info':
       default:
         return <InformationCircleIcon className="h-6 w-6" />

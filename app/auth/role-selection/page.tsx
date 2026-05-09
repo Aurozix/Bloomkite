@@ -29,67 +29,41 @@ export default function RoleSelection() {
         return
       }
       setUser(user)
+
+      // Check if user already has a role
+      const { data: userRoles } = await client
+        .from('user_roles')
+        .select('role:roles(name)')
+        .eq('user_id', user.id)
+
+      if (userRoles && userRoles.length > 0) {
+        // User already has a role, go to dashboard
+        router.push('/dashboard')
+        return
+      }
     }
 
     getUser()
   }, [router])
 
   const handleRoleSelect = async () => {
-    if (!selectedRole || !supabase || !user) return
+    if (!selectedRole || !user) return
 
     setLoading(true)
     try {
-      // Get the role ID
-      const { data: role } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', selectedRole)
-        .single()
+      const response = await fetch('/api/auth/select-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: selectedRole,
+          userId: user.id,
+        }),
+      })
 
-      if (!role) {
-        console.error('Role not found')
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('Error assigning role:', error)
         return
-      }
-
-      // Create user_roles entry
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: user.id,
-          role_id: role.id,
-        })
-
-      if (roleError) {
-        console.error('Error assigning role:', roleError)
-        return
-      }
-
-      // Create profile based on role
-      if (selectedRole === 'investor') {
-        const { error: profileError } = await supabase
-          .from('investor_profiles')
-          .insert({
-            user_id: user.id,
-            display_name: user.user_metadata?.full_name || '',
-          })
-
-        if (profileError) {
-          console.error('Error creating investor profile:', profileError)
-          return
-        }
-      } else if (selectedRole === 'advisor') {
-        const { error: profileError } = await supabase
-          .from('advisor_profiles')
-          .insert({
-            user_id: user.id,
-            display_name: user.user_metadata?.full_name || '',
-            workflow_status: 'pending',
-          })
-
-        if (profileError) {
-          console.error('Error creating advisor profile:', profileError)
-          return
-        }
       }
 
       // Redirect to dashboard
@@ -107,7 +81,7 @@ export default function RoleSelection() {
         {/* Header */}
         <div className="text-center mb-12">
           <img src="/Bloomkite.png" alt="Bloomkite" className="h-20 w-20 mx-auto mb-6" />
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
+          <h1 className="text-4xl font-bold gradient-text mb-3">
             Welcome to Bloomkite
           </h1>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Role</h2>
@@ -123,11 +97,12 @@ export default function RoleSelection() {
             onClick={() => setSelectedRole('investor')}
             className={`card p-8 text-left transition-all ${
               selectedRole === 'investor'
-                ? 'ring-2 ring-blue-600 shadow-lg'
+                ? 'shadow-lg'
                 : 'hover:shadow-lg'
             }`}
+            style={selectedRole === 'investor' ? { outline: '2px solid var(--primary-600)', outlineOffset: '-2px' } : {}}
           >
-            <WalletIcon className="h-16 w-16 text-blue-600 mb-4" />
+            <WalletIcon className="h-16 w-16 mb-4" style={{ color: 'var(--primary-600)' }} />
             <h3 className="text-2xl font-bold text-gray-900 mb-3">Investor</h3>
             <p className="text-gray-600 mb-6">
               Seek financial advice, use powerful calculators, and connect with trusted advisors
@@ -157,11 +132,12 @@ export default function RoleSelection() {
             onClick={() => setSelectedRole('advisor')}
             className={`card p-8 text-left transition-all ${
               selectedRole === 'advisor'
-                ? 'ring-2 ring-purple-600 shadow-lg'
+                ? 'shadow-lg'
                 : 'hover:shadow-lg'
             }`}
+            style={selectedRole === 'advisor' ? { outline: '2px solid var(--secondary-600)', outlineOffset: '-2px' } : {}}
           >
-            <BriefcaseIcon className="h-16 w-16 text-purple-600 mb-4" />
+            <BriefcaseIcon className="h-16 w-16 mb-4" style={{ color: 'var(--secondary-600)' }} />
             <h3 className="text-2xl font-bold text-gray-900 mb-3">Advisor</h3>
             <p className="text-gray-600 mb-6">
               Build credibility, reach clients, and publish your expertise
@@ -196,7 +172,7 @@ export default function RoleSelection() {
           >
             {loading ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" style={{ borderTopColor: 'transparent' }}></div>
                 Setting up your account...
               </div>
             ) : (

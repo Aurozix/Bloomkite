@@ -1,9 +1,12 @@
+'use client'
+
 import {
   CalculatorIcon,
   ShieldCheckIcon,
   ArrowsRightLeftIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline'
+import { ColorSchemeSelector } from './components/color-scheme-selector'
 
 export default function Home() {
   return (
@@ -17,16 +20,21 @@ export default function Home() {
               Bloomkite
             </span>
           </div>
-          <a href="/auth/signin" className="btn-primary text-sm">
-            Sign In
-          </a>
+          <div className="flex items-center gap-6">
+            <div style={{ display: 'none' }}>
+              <ColorSchemeSelector />
+            </div>
+            <a href="/auth/signin" className="btn-primary text-sm">
+              Sign In
+            </a>
+          </div>
         </div>
       </nav>
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
         {/* Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-purple-600 to-blue-700 -z-10"></div>
+        <div className="absolute inset-0 -z-10" style={{ background: 'var(--hero-gradient)' }}></div>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml,...')] opacity-10 -z-10"></div>
 
         <div className="max-w-5xl mx-auto text-center text-white">
@@ -189,7 +197,7 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+      <section className="py-24 px-4 text-white" style={{ background: 'var(--hero-gradient)' }}>
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-5xl font-bold mb-6">Ready to Plan Your Future?</h2>
           <p className="text-xl mb-8 text-white/90">

@@ -3,6 +3,7 @@ import { Nunito } from 'next/font/google'
 import './globals.css'
 import { ToastProvider } from './components/toast-context'
 import { ToastContainer } from './components/toast-container'
+import { ColorSchemeProvider } from './components/color-scheme-context'
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -25,14 +26,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={nunito.className}>
-        <ToastProvider>
-          <div className="min-h-screen flex flex-col">
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
-          <ToastContainer />
-        </ToastProvider>
+        <ColorSchemeProvider>
+          <ToastProvider>
+            <div className="min-h-screen flex flex-col">
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+            <ToastContainer />
+          </ToastProvider>
+        </ColorSchemeProvider>
       </body>
     </html>
   )

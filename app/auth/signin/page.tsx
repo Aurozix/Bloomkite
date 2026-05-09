@@ -12,12 +12,14 @@ export default function SignIn() {
   const router = useRouter()
   const { addToast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [testLoading, setTestLoading] = useState(false)
   const [supabase, setSupabase] = useState<any>(null)
 
   useEffect(() => {
     setSupabase(createClient(supabaseUrl, supabaseAnonKey))
   }, [])
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   const handleGoogleSignIn = async () => {
     if (!supabase) return
@@ -41,27 +43,50 @@ export default function SignIn() {
     }
   }
 
-  const handleTestLogin = async (role: 'investor' | 'advisor') => {
-    setTestLoading(true)
+  const handleEmailSignIn = async () => {
+    if (!supabase || !email || !password) {
+      addToast('Please enter email and password', 'error')
+      return
+    }
+
+    setLoading(true)
     try {
-      const testEmail = `test-${role}@bloomkite.local`
-      const response = await fetch('/api/auth/test-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: testEmail, role }),
+      const { error, data } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      if (!response.ok) {
-        throw new Error('Test login failed')
+      if (error) {
+        console.error('Email sign in error:', error)
+        addToast(error.message || 'Sign in failed', 'error')
+        return
       }
 
-      // Redirect to role selection
+      // Store session in localStorage and cookies
+      if (data.session) {
+        const projectId = supabaseUrl?.split('.')[0].split('//')[1] || 'local'
+        localStorage.setItem(
+          `sb-${projectId}-auth-token`,
+          JSON.stringify(data.session)
+        )
+
+        // Also set cookies for server-side session verification
+        await fetch('/api/auth/set-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          }),
+        })
+      }
+
       router.push('/auth/role-selection')
     } catch (err) {
-      console.error('Test login error:', err)
-      addToast('Test login failed. Check console for details.', 'error')
+      console.error('Unexpected error:', err)
+      addToast('An unexpected error occurred', 'error')
     } finally {
-      setTestLoading(false)
+      setLoading(false)
     }
   }
 
@@ -71,7 +96,7 @@ export default function SignIn() {
         {/* Header */}
         <div className="text-center mb-12">
           <img src="/Bloomkite.png" alt="Bloomkite" className="h-20 w-20 mx-auto mb-6" />
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
+          <h1 className="text-4xl font-bold gradient-text mb-3">
             Bloomkite
           </h1>
           <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
@@ -82,6 +107,42 @@ export default function SignIn() {
 
         {/* Sign In Card */}
         <div className="card p-8 space-y-6 mb-6">
+          <div className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
+              onKeyDown={(e) => e.key === 'Enter' && handleEmailSignIn()}
+            />
+            <button
+              onClick={handleEmailSignIn}
+              disabled={loading}
+              className="btn-primary w-full py-3 text-lg"
+            >
+              {loading ? 'Signing in...' : 'Sign In with Email'}
+            </button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-3 bg-white text-gray-500 text-sm font-medium">or</span>
+            </div>
+          </div>
+
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}
@@ -89,7 +150,7 @@ export default function SignIn() {
           >
             {loading ? (
               <>
-                <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--primary-600)', borderTopColor: 'transparent' }}></div>
                 <span>Signing in...</span>
               </>
             ) : (
@@ -102,29 +163,6 @@ export default function SignIn() {
             )}
           </button>
 
-          {process.env.NODE_ENV === 'development' && (
-            <div className="space-y-3 bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-xl p-4">
-              <p className="text-xs font-semibold text-yellow-800">
-                🧪 Development Mode - Test Login
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleTestLogin('investor')}
-                  disabled={testLoading}
-                  className="px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition disabled:opacity-50"
-                >
-                  {testLoading ? 'Loading...' : '👤 Investor'}
-                </button>
-                <button
-                  onClick={() => handleTestLogin('advisor')}
-                  disabled={testLoading}
-                  className="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 transition disabled:opacity-50"
-                >
-                  {testLoading ? 'Loading...' : '💼 Advisor'}
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
