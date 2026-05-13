@@ -205,6 +205,32 @@ export interface EMICalculatorResult {
   amortisationResponse: EMIAmortizationRow[]
 }
 
+// EMI Capacity Calculator: max loan affordable given income, expenses, stability
+export type IncomeStabilityLevel = 'HIGH' | 'MEDIUM'
+export type BackupAvailability = 'YES' | 'NO'
+
+export interface EMICapacityInput {
+  currentAge: number
+  retirementAge: number
+  netFamilyIncome: number
+  existingEmi: number
+  houseHoldExpense: number
+  additionalIncome: number
+  stability: IncomeStabilityLevel
+  backUp: BackupAvailability
+  interestRate: number
+}
+
+export interface EMICapacityResult {
+  surplusMoney: string
+  surplus: string
+  emiCapacity: string
+  termOfLoan: number
+  advisableLoanAmount: string
+  monthlyEmiAffordable: string
+  stabilityMultiplier: string
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string

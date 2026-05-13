@@ -5,6 +5,37 @@ import {
   EMICalculatorResult,
 } from './types'
 
+// EMI = P × [r(1+r)^n] / [(1+r)^n − 1]
+// Returns the monthly payment for a fixed-rate loan of principal P over n months
+// at monthly rate r. Zero-rate degenerates to P/n (linear amortization).
+export function emiFromLoan(
+  principal: Decimal,
+  monthlyRate: Decimal,
+  nMonths: number,
+): Decimal {
+  if (nMonths <= 0 || principal.lessThanOrEqualTo(0)) return new Decimal(0)
+  if (monthlyRate.isZero()) return principal.dividedBy(nMonths)
+  const onePlusR = new Decimal(1).plus(monthlyRate)
+  const pow = onePlusR.pow(nMonths)
+  return principal.times(monthlyRate).times(pow).dividedBy(pow.minus(1))
+}
+
+// Inverse of emiFromLoan — the principal that produces a given monthly payment
+// stream. This is the present value of an n-month annuity at monthly rate r:
+//   P = EMI × [(1+r)^n − 1] / [r(1+r)^n]
+// Used by EMI Capacity to convert affordable EMI → max loan amount.
+export function loanFromEmi(
+  emi: Decimal,
+  monthlyRate: Decimal,
+  nMonths: number,
+): Decimal {
+  if (nMonths <= 0 || emi.lessThanOrEqualTo(0)) return new Decimal(0)
+  if (monthlyRate.isZero()) return emi.times(nMonths)
+  const onePlusR = new Decimal(1).plus(monthlyRate)
+  const pow = onePlusR.pow(nMonths)
+  return emi.times(pow.minus(1)).dividedBy(monthlyRate.times(pow))
+}
+
 const MONTH_NAMES = [
   'Jan',
   'Feb',
@@ -67,19 +98,7 @@ export function calculateEmi(input: EMICalculatorInput): EMICalculatorResult {
     }
   }
 
-  // Zero-interest loan: EMI is simply principal / nMonths. The geometric
-  // formula divides by zero, so handle it explicitly.
-  let emi: Decimal
-  if (monthlyRate.isZero()) {
-    emi = principal.dividedBy(nMonths)
-  } else {
-    const onePlusR = new Decimal(1).plus(monthlyRate)
-    const pow = onePlusR.pow(nMonths)
-    emi = principal
-      .times(monthlyRate)
-      .times(pow)
-      .dividedBy(pow.minus(1))
-  }
+  const emi = emiFromLoan(principal, monthlyRate, nMonths)
 
   // Build amortization schedule. The last row's closing balance is forced to
   // zero so floating-point drift over hundreds of months doesn't leave a

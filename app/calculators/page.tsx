@@ -14,6 +14,7 @@ import {
   AdjustmentsHorizontalIcon,
   ScaleIcon,
   HomeModernIcon,
+  WalletIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -101,6 +102,13 @@ const calculators: Calculator[] = [
     description: 'Calculate monthly loan EMI with a full amortization schedule',
     icon: HomeModernIcon,
     path: '/calculators/emi',
+  },
+  {
+    id: 'emi-capacity',
+    name: 'EMI Capacity',
+    description: 'Maximum loan you can afford from your income, expenses, and stability',
+    icon: WalletIcon,
+    path: '/calculators/emi-capacity',
   },
 ]
 
