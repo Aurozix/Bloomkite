@@ -9,6 +9,10 @@ const customJestConfig = {
   testEnvironment: 'jest-environment-node',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    // next-auth, @auth/*, oauth4webapi, jose, and @panva/hkdf ship ESM-only;
+    // Jest can't parse them. The tests that touch auth mock it via jest.setup.ts.
+    '^next-auth(/.*)?$': '<rootDir>/__tests__/__mocks__/next-auth.ts',
+    '^@auth/.*$': '<rootDir>/__tests__/__mocks__/empty.ts',
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',

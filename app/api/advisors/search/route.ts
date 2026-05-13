@@ -1,8 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+import { prisma } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,84 +13,98 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    // Base query against advisor_profiles. PostgREST can't traverse the
-    // implicit advisor_profiles -> users <- advisor_followers chain (both
-    // advisor_followers.advisor_id and advisor_expertise.user_id reference
-    // users.id, not advisor_profiles.user_id), so we fetch profiles here and
-    // load expertise in a second batched query below.
-    //
-    // follower_count comes from the denormalized column on advisor_profiles
-    // maintained by the trigger in migration 005.
-    let query = supabase
-      .from('advisor_profiles')
-      .select('*', { count: 'exact' })
-      .eq('is_verified', true)
-      .eq('workflow_status', 'approved')
+    // Base query against advisor_profiles. follower_count comes from the
+    // denormalized column maintained by the trigger in migration 005.
+    const where: any = {
+      isVerified: true,
+      workflowStatus: 'approved',
+    }
 
     if (q) {
-      query = query.or(
-        `display_name.ilike.%${q}%,company_name.ilike.%${q}%,bio.ilike.%${q}%`
-      )
+      where.OR = [
+        { displayName: { contains: q, mode: 'insensitive' } },
+        { companyName: { contains: q, mode: 'insensitive' } },
+        { bio: { contains: q, mode: 'insensitive' } },
+      ]
     }
 
     if (city) {
-      query = query.eq('city', city)
+      where.city = city
     }
 
     // Both sort branches use a deterministic created_at tiebreaker so equal
     // counts produce a stable order across pages.
-    if (sort === 'followers') {
-      query = query
-        .order('follower_count', { ascending: false })
-        .order('created_at', { ascending: false })
-    } else {
-      query = query.order('created_at', { ascending: false })
-    }
+    const orderBy: any =
+      sort === 'followers'
+        ? [{ followerCount: 'desc' }, { createdAt: 'desc' }]
+        : [{ createdAt: 'desc' }]
 
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: advisors, error, count } = await query
-
-    if (error) {
-      console.error('Search error:', error)
-      return NextResponse.json({ error: 'Failed to search advisors' }, { status: 500 })
-    }
-
-    const advisorList = advisors ?? []
+    const [advisors, count] = await Promise.all([
+      prisma.advisorProfile.findMany({
+        where,
+        orderBy,
+        skip: offset,
+        take: limit,
+      }),
+      prisma.advisorProfile.count({ where }),
+    ])
 
     // Batch-fetch expertise rows for the visible advisors so the page can
     // render their specialisation tags. One query per request, regardless of
     // result-set size.
-    const userIds = advisorList.map((a: any) => a.user_id).filter(Boolean)
+    const userIds = advisors.map((a) => a.userId).filter(Boolean)
     const expertiseByUser = new Map<string, string[]>()
     if (userIds.length > 0) {
-      const { data: expertiseRows } = await supabase
-        .from('advisor_expertise')
-        .select('user_id, specialization')
-        .in('user_id', userIds)
-      for (const row of expertiseRows ?? []) {
-        const arr = expertiseByUser.get((row as any).user_id) ?? []
-        arr.push((row as any).specialization)
-        expertiseByUser.set((row as any).user_id, arr)
+      const expertiseRows = await prisma.advisorExpertise.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, specialization: true },
+      })
+      for (const row of expertiseRows) {
+        const arr = expertiseByUser.get(row.userId) ?? []
+        arr.push(row.specialization)
+        expertiseByUser.set(row.userId, arr)
       }
     }
 
     // Specialization filter is post-fetch (the embedded query was the same).
     // Acceptable at MVP volumes; revisit if advisor count gets large.
-    let filtered = advisorList
+    let filtered = advisors
     if (specialization) {
-      filtered = filtered.filter((advisor: any) => {
-        const tags = expertiseByUser.get(advisor.user_id) ?? []
+      filtered = filtered.filter((advisor) => {
+        const tags = expertiseByUser.get(advisor.userId) ?? []
         return tags.some((t) => t.toLowerCase().includes(specialization))
       })
     }
 
-    const formattedAdvisors = filtered.map((advisor: any) => ({
-      ...advisor,
-      follower_count: advisor.follower_count ?? 0,
-      expertise: expertiseByUser.get(advisor.user_id) ?? [],
+    // Map Prisma camelCase back to snake_case for API compatibility.
+    const formattedAdvisors = filtered.map((advisor) => ({
+      id: advisor.id,
+      user_id: advisor.userId,
+      display_name: advisor.displayName,
+      phone_number: advisor.phoneNumber,
+      date_of_birth: advisor.dateOfBirth,
+      gender: advisor.gender,
+      company_name: advisor.companyName,
+      designation: advisor.designation,
+      pan_number: advisor.panNumber,
+      gst_number: advisor.gstNumber,
+      address_line1: advisor.addressLine1,
+      address_line2: advisor.addressLine2,
+      city: advisor.city,
+      state: advisor.state,
+      pincode: advisor.pincode,
+      website_url: advisor.websiteUrl,
+      bio: advisor.bio,
+      profile_image_url: advisor.profileImageUrl,
+      workflow_status: advisor.workflowStatus,
+      approved_by: advisor.approvedBy,
+      approved_at: advisor.approvedAt,
+      is_verified: advisor.isVerified,
+      verified_at: advisor.verifiedAt,
+      follower_count: advisor.followerCount ?? 0,
+      created_at: advisor.createdAt,
+      updated_at: advisor.updatedAt,
+      expertise: expertiseByUser.get(advisor.userId) ?? [],
     }))
 
     return NextResponse.json({

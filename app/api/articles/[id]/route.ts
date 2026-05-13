@@ -1,53 +1,60 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { getCurrentUser, requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+
+function serializeArticle(article: any) {
+  const { author, ...rest } = article
+  return {
+    id: rest.id,
+    author_id: rest.authorId,
+    title: rest.title,
+    content: rest.content,
+    category: rest.category,
+    tags: rest.tags,
+    featured_image_url: rest.featuredImageUrl,
+    status: rest.status,
+    rejection_reason: rest.rejectionReason,
+    published_at: rest.publishedAt,
+    created_at: rest.createdAt,
+    updated_at: rest.updatedAt,
+    ...(author !== undefined
+      ? {
+          author: author
+            ? { id: author.id, email: author.email, full_name: author.name }
+            : null,
+        }
+      : {}),
+  }
+}
 
 // GET - Get single article
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const articleId = params.id
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-    const { data: article, error } = await supabase
-      .from('articles')
-      .select(
-        `
-        *,
-        author:users(id, email, full_name)
-      `
-      )
-      .eq('id', articleId)
-      .single()
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+      include: {
+        author: { select: { id: true, email: true, name: true } },
+      },
+    })
 
-    if (error || !article) {
+    if (!article) {
       return NextResponse.json({ error: 'Article not found' }, { status: 404 })
     }
 
     // Allow viewing published articles or own drafts
     if (article.status !== 'published') {
-      const cookieStore = await cookies()
-      const accessToken = cookieStore.get('sb-access-token')?.value
-
-      if (!accessToken) {
-        return NextResponse.json({ error: 'Article not found' }, { status: 404 })
-      }
-
-      const parts = accessToken.split('.')
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-      const userId = payload.sub
-
-      if (article.author_id !== userId) {
+      const currentUser = await getCurrentUser()
+      if (!currentUser || article.authorId !== currentUser.id) {
         return NextResponse.json({ error: 'Article not found' }, { status: 404 })
       }
     }
 
     return NextResponse.json({
       success: true,
-      data: article,
+      data: serializeArticle(article),
     })
   } catch (error) {
     console.error('Get article error:', error)
@@ -58,31 +65,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 // PUT - Update article (author only, drafts only)
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const articleId = params.id
     const body = await request.json()
     const { title, content, category, tags } = body
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
     // Check ownership and status
-    const { data: existing } = await supabase
-      .from('articles')
-      .select('*')
-      .eq('id', articleId)
-      .single()
+    const existing = await prisma.article.findUnique({ where: { id: articleId } })
 
-    if (!existing || existing.author_id !== userId) {
+    if (!existing || existing.authorId !== user.id) {
       return NextResponse.json({ error: 'Not found or unauthorized' }, { status: 404 })
     }
 
@@ -93,28 +87,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    const { data, error } = await supabase
-      .from('articles')
-      .update({
+    const data = await prisma.article.update({
+      where: { id: articleId },
+      data: {
         title: title || existing.title,
         content: content || existing.content,
         category: category !== undefined ? category : existing.category,
         tags: tags || existing.tags,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', articleId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error updating article:', error)
-      return NextResponse.json({ error: 'Failed to update article' }, { status: 500 })
-    }
+        updatedAt: new Date(),
+      },
+    })
 
     return NextResponse.json({
       success: true,
       message: 'Article updated',
-      data,
+      data: serializeArticle(data),
     })
   } catch (error) {
     console.error('Update article error:', error)

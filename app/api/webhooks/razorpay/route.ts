@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { NextRequest, NextResponse } from 'next/server'
+
+import { prisma } from '@/lib/db'
+
 const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || ''
 
 // Razorpay webhook handler. Validates signature, then drives subscription
@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing event' }, { status: 400 })
     }
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey)
     const orderId = orderEntity?.id || paymentEntity?.order_id
 
     if (!orderId) {
@@ -48,11 +47,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ignored: true })
     }
 
-    const { data: sub } = await admin
-      .from('subscriptions')
-      .select('id, user_id, status, plan:subscription_plans(billing_period)')
-      .eq('razorpay_order_id', orderId)
-      .single()
+    const sub = await prisma.subscription.findFirst({
+      where: { razorpayOrderId: orderId },
+      include: { plan: { select: { billingPeriod: true } } },
+    })
 
     if (!sub) {
       return NextResponse.json({ success: true, ignored: true })
@@ -63,38 +61,38 @@ export async function POST(request: NextRequest) {
     if (eventType === 'payment.captured' || eventType === 'order.paid') {
       if (sub.status !== 'active') {
         const periodEnd = new Date(now)
-        const planRecord: any = (sub as any).plan
-        const planInfo = Array.isArray(planRecord) ? planRecord[0] : planRecord
-        if (planInfo?.billing_period === 'yearly') {
+        if (sub.plan?.billingPeriod === 'yearly') {
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
         } else {
           periodEnd.setMonth(periodEnd.getMonth() + 1)
         }
 
-        await admin
-          .from('subscriptions')
-          .update({
+        await prisma.subscription.update({
+          where: { id: sub.id },
+          data: {
             status: 'active',
-            razorpay_payment_id: paymentEntity?.id,
-            current_period_start: now.toISOString(),
-            current_period_end: periodEnd.toISOString(),
-            updated_at: now.toISOString(),
-          })
-          .eq('id', sub.id)
+            razorpayPaymentId: paymentEntity?.id,
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+            updatedAt: now,
+          },
+        })
 
-        await admin.from('invoices').insert({
-          subscription_id: sub.id,
-          user_id: sub.user_id,
-          amount_inr_paise: paymentEntity?.amount ?? 0,
-          razorpay_payment_id: paymentEntity?.id,
+        await prisma.invoice.create({
+          data: {
+            subscriptionId: sub.id,
+            userId: sub.userId,
+            amountInrPaise: BigInt(paymentEntity?.amount ?? 0),
+            razorpayPaymentId: paymentEntity?.id,
+          },
         })
       }
     } else if (eventType === 'payment.failed') {
       if (sub.status === 'pending') {
-        await admin
-          .from('subscriptions')
-          .update({ status: 'failed', updated_at: now.toISOString() })
-          .eq('id', sub.id)
+        await prisma.subscription.update({
+          where: { id: sub.id },
+          data: { status: 'failed', updatedAt: now },
+        })
       }
     }
 

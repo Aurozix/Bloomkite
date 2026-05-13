@@ -1,10 +1,30 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+
+// Map a Prisma article (with author relation) to the snake_case shape the
+// frontend has historically received.
+function serializeArticle(article: any) {
+  const { author, ...rest } = article
+  return {
+    id: rest.id,
+    author_id: rest.authorId,
+    title: rest.title,
+    content: rest.content,
+    category: rest.category,
+    tags: rest.tags,
+    featured_image_url: rest.featuredImageUrl,
+    status: rest.status,
+    rejection_reason: rest.rejectionReason,
+    published_at: rest.publishedAt,
+    created_at: rest.createdAt,
+    updated_at: rest.updatedAt,
+    author: author
+      ? { id: author.id, email: author.email, full_name: author.name }
+      : null,
+  }
+}
 
 // GET - List published articles (public)
 export async function GET(request: NextRequest) {
@@ -15,35 +35,25 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
+    const where: any = { status: 'published' }
+    if (category) where.category = category
 
-    let query = supabase
-      .from('articles')
-      .select(
-        `
-        *,
-        author:users(id, email, full_name)
-      `,
-        { count: 'exact' }
-      )
-      .eq('status', 'published')
-
-    if (category) {
-      query = query.eq('category', category)
-    }
-
-    query = query.order('published_at', { ascending: false }).range(offset, offset + limit - 1)
-
-    const { data: articles, error, count } = await query
-
-    if (error) {
-      console.error('Error fetching articles:', error)
-      return NextResponse.json({ error: 'Failed to fetch articles' }, { status: 500 })
-    }
+    const [articles, count] = await Promise.all([
+      prisma.article.findMany({
+        where,
+        include: {
+          author: { select: { id: true, email: true, name: true } },
+        },
+        orderBy: { publishedAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      prisma.article.count({ where }),
+    ])
 
     return NextResponse.json({
       success: true,
-      data: articles || [],
+      data: articles.map(serializeArticle),
       pagination: {
         page,
         limit,
@@ -60,17 +70,9 @@ export async function GET(request: NextRequest) {
 // POST - Create draft article (advisor only)
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Decode JWT to get user ID
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const body = await request.json()
     const { title, content, category, tags } = body
@@ -79,30 +81,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title and content are required' }, { status: 400 })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    const { data, error } = await supabase
-      .from('articles')
-      .insert({
-        author_id: userId,
+    const data = await prisma.article.create({
+      data: {
+        authorId: user.id,
         title,
         content,
         category: category || null,
         tags: tags || [],
         status: 'draft',
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating article:', error)
-      return NextResponse.json({ error: 'Failed to create article' }, { status: 500 })
-    }
+      },
+    })
 
     return NextResponse.json({
       success: true,
       message: 'Article created as draft',
-      data,
+      data: serializeArticle(data),
     })
   } catch (error) {
     console.error('Create article error:', error)

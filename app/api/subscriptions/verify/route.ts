@@ -1,11 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { getPaymentProvider } from '@/lib/subscriptions/provider'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+import { getPaymentProvider } from '@/lib/subscriptions/provider'
 
 // Called after the payment provider's checkout step. In live mode, the
 // frontend receives `payment_id`, `order_id`, `signature` from Razorpay
@@ -13,21 +10,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 // frontend just calls this with the synthesized order_id.
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    })
-    const {
-      data: { user },
-    } = await userClient.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const body = await request.json()
     const orderId: string | undefined = body?.order_id
@@ -51,17 +36,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey)
-
     // Find the pending subscription for this order.
-    const { data: sub, error: lookupErr } = await admin
-      .from('subscriptions')
-      .select('id, plan_id, user_id, status, plan:subscription_plans(billing_period)')
-      .eq('razorpay_order_id', orderId)
-      .eq('user_id', user.id)
-      .single()
+    const sub = await prisma.subscription.findFirst({
+      where: { razorpayOrderId: orderId, userId: user.id },
+      include: { plan: { select: { billingPeriod: true } } },
+    })
 
-    if (lookupErr || !sub) {
+    if (!sub) {
       return NextResponse.json({ error: 'Subscription not found' }, { status: 404 })
     }
 
@@ -74,9 +55,7 @@ export async function POST(request: NextRequest) {
 
     const now = new Date()
     const periodEnd = new Date(now)
-    const planRecord: any = (sub as any).plan
-    const planInfo = Array.isArray(planRecord) ? planRecord[0] : planRecord
-    const billingPeriod = planInfo?.billing_period
+    const billingPeriod = sub.plan?.billingPeriod
     if (billingPeriod === 'monthly') {
       periodEnd.setMonth(periodEnd.getMonth() + 1)
     } else if (billingPeriod === 'yearly') {
@@ -86,30 +65,36 @@ export async function POST(request: NextRequest) {
       periodEnd.setFullYear(periodEnd.getFullYear() + 100)
     }
 
-    const { error: updErr } = await admin
-      .from('subscriptions')
-      .update({
-        status: 'active',
-        razorpay_payment_id: verifyResult.paymentId,
-        current_period_start: now.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-        updated_at: now.toISOString(),
+    try {
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: {
+          status: 'active',
+          razorpayPaymentId: verifyResult.paymentId,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          updatedAt: now,
+        },
       })
-      .eq('id', sub.id)
-
-    if (updErr) {
+    } catch (updErr) {
       console.error('Subscription activate error:', updErr)
       return NextResponse.json({ error: 'Failed to activate subscription' }, { status: 500 })
     }
 
     // Best-effort invoice row. Failure here doesn't block activation —
     // operations can backfill later.
-    await admin.from('invoices').insert({
-      subscription_id: sub.id,
-      user_id: user.id,
-      amount_inr_paise: 0, // updated by webhook if real provider
-      razorpay_payment_id: verifyResult.paymentId,
-    })
+    try {
+      await prisma.invoice.create({
+        data: {
+          subscriptionId: sub.id,
+          userId: user.id,
+          amountInrPaise: BigInt(0), // updated by webhook if real provider
+          razorpayPaymentId: verifyResult.paymentId,
+        },
+      })
+    } catch (invoiceErr) {
+      console.error('Invoice insert error (non-fatal):', invoiceErr)
+    }
 
     return NextResponse.json({
       success: true,

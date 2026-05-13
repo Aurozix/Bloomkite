@@ -5,7 +5,7 @@
 //
 // `hasFeature` is the only API callers should use to gate features.
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { prisma } from '@/lib/db'
 
 export type TierSlug = 'free' | 'silver' | 'gold'
 
@@ -51,33 +51,32 @@ export function tierAtLeast(actual: TierSlug, required: TierSlug): boolean {
  * Look up the user's active subscription and resolve to a tier. Returns
  * DEFAULT_FREE on any miss — never throws into the caller's hot path.
  */
-export async function getActiveTier(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<ResolvedTier> {
+export async function getActiveTier(userId: string): Promise<ResolvedTier> {
   try {
-    const now = new Date().toISOString()
-    const { data: sub } = await supabase
-      .from('subscriptions')
-      .select('id, plan_id, current_period_end, status, plan:subscription_plans(slug, name, features)')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .gt('current_period_end', now)
-      .order('current_period_end', { ascending: false })
-      .limit(1)
-      .single()
+    const now = new Date()
+    const sub = await prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: 'active',
+        currentPeriodEnd: { gt: now },
+      },
+      orderBy: { currentPeriodEnd: 'desc' },
+      include: {
+        plan: {
+          select: { slug: true, name: true, features: true },
+        },
+      },
+    })
 
-    if (sub && (sub as any).plan) {
-      const planRecord = (sub as any).plan
-      const plan = Array.isArray(planRecord) ? planRecord[0] : planRecord
-      if (plan?.slug) {
-        return {
-          slug: plan.slug as TierSlug,
-          name: plan.name,
-          features: plan.features as TierFeatures,
-          subscriptionId: (sub as any).id,
-          currentPeriodEnd: (sub as any).current_period_end,
-        }
+    if (sub && sub.plan?.slug) {
+      return {
+        slug: sub.plan.slug as TierSlug,
+        name: sub.plan.name,
+        features: sub.plan.features as unknown as TierFeatures,
+        subscriptionId: sub.id,
+        currentPeriodEnd: sub.currentPeriodEnd
+          ? sub.currentPeriodEnd.toISOString()
+          : null,
       }
     }
   } catch {
@@ -97,17 +96,4 @@ export function hasFeature(
 ): boolean {
   const val = tier.features[feature]
   return typeof val === 'boolean' ? val : Number(val) > 0
-}
-
-/**
- * Convenience: build a service-role supabase client for use in API routes
- * after the request has been authorized. (Anon clients can also be used; this
- * is just a shortcut for routes that need to read subscription data without
- * RLS getting in the way.)
- */
-export function adminClient(): SupabaseClient {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  )
 }

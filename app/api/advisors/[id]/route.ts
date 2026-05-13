@@ -1,81 +1,108 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { getCurrentUser } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+
+function serializeProfile(p: any) {
+  return {
+    id: p.id,
+    user_id: p.userId,
+    display_name: p.displayName,
+    phone_number: p.phoneNumber,
+    date_of_birth: p.dateOfBirth,
+    gender: p.gender,
+    company_name: p.companyName,
+    designation: p.designation,
+    pan_number: p.panNumber,
+    gst_number: p.gstNumber,
+    address_line1: p.addressLine1,
+    address_line2: p.addressLine2,
+    city: p.city,
+    state: p.state,
+    pincode: p.pincode,
+    website_url: p.websiteUrl,
+    bio: p.bio,
+    profile_image_url: p.profileImageUrl,
+    workflow_status: p.workflowStatus,
+    approved_by: p.approvedBy,
+    approved_at: p.approvedAt,
+    is_verified: p.isVerified,
+    verified_at: p.verifiedAt,
+    follower_count: p.followerCount,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  }
+}
+
+function serializeCredential(c: any) {
+  return {
+    id: c.id,
+    user_id: c.userId,
+    credential_type: c.credentialType,
+    issuer: c.issuer,
+    license_number: c.licenseNumber,
+    expiry_date: c.expiryDate,
+    file_url: c.fileUrl,
+    status: c.status,
+    rejection_reason: c.rejectionReason,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  }
+}
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const advisorId = params.id
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
 
     // Get current user (if authenticated)
-    let currentUserId = null
-    if (accessToken) {
-      const parts = accessToken.split('.')
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-      currentUserId = payload.sub
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    })
+    const currentUser = await getCurrentUser()
+    const currentUserId = currentUser?.id ?? null
 
     // Fetch advisor profile
-    const { data: profile, error: profileError } = await supabase
-      .from('advisor_profiles')
-      .select('*')
-      .eq('user_id', advisorId)
-      .single()
+    const profile = await prisma.advisorProfile.findUnique({
+      where: { userId: advisorId },
+    })
 
-    if (profileError || !profile) {
+    if (!profile) {
       return NextResponse.json({ error: 'Advisor not found' }, { status: 404 })
     }
 
     // Fetch approved credentials
-    const { data: credentials } = await supabase
-      .from('advisor_credentials')
-      .select('*')
-      .eq('user_id', advisorId)
-      .eq('status', 'approved')
+    const credentials = await prisma.advisorCredential.findMany({
+      where: { userId: advisorId, status: 'approved' },
+    })
 
     // Fetch expertise
-    const { data: expertise } = await supabase
-      .from('advisor_expertise')
-      .select('specialization')
-      .eq('user_id', advisorId)
+    const expertise = await prisma.advisorExpertise.findMany({
+      where: { userId: advisorId },
+      select: { specialization: true },
+    })
 
     // Fetch follower count
-    const supabaseServiceRole = createClient(supabaseUrl, supabaseKey)
-    const { count: followerCount } = await supabaseServiceRole
-      .from('advisor_followers')
-      .select('*', { count: 'exact', head: true })
-      .eq('advisor_id', advisorId)
+    const followerCount = await prisma.advisorFollower.count({
+      where: { advisorId },
+    })
 
     // Check if current user is following
     let isFollowing = false
     if (currentUserId) {
-      const { data: followData } = await supabase
-        .from('advisor_followers')
-        .select('*')
-        .eq('investor_id', currentUserId)
-        .eq('advisor_id', advisorId)
-        .single()
-
+      const followData = await prisma.advisorFollower.findUnique({
+        where: {
+          investorId_advisorId: {
+            investorId: currentUserId,
+            advisorId,
+          },
+        },
+      })
       isFollowing = !!followData
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        ...profile,
-        credentials: credentials || [],
-        expertise: expertise?.map((e) => e.specialization) || [],
+        ...serializeProfile(profile),
+        credentials: credentials.map(serializeCredential),
+        expertise: expertise.map((e) => e.specialization),
         follower_count: followerCount || 0,
         is_following: isFollowing,
       },

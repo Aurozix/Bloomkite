@@ -1,24 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const userId = auth.user.id
 
     const answerId = params.id
     const body = await request.json()
@@ -28,45 +17,22 @@ const supabase = createClient(supabaseUrl, supabaseKey)
       return NextResponse.json({ error: 'Invalid vote type' }, { status: 400 })
     }
 
-    // Check if vote already exists
-    const { data: existingVote } = await supabase
-      .from('forum_answer_votes')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('answer_id', answerId)
-      .single()
-
-    if (existingVote) {
-      // Update existing vote
-      await supabase
-        .from('forum_answer_votes')
-        .update({ vote_type })
-        .eq('user_id', userId)
-        .eq('answer_id', answerId)
-    } else {
-      // Insert new vote
-      await supabase
-        .from('forum_answer_votes')
-        .insert({
-          user_id: userId,
-          answer_id: answerId,
-          vote_type,
-        })
-    }
+    // Upsert vote (one vote per user/answer)
+    await prisma.forumAnswerVote.upsert({
+      where: { userId_answerId: { userId, answerId } },
+      create: { userId, answerId, voteType: vote_type },
+      update: { voteType: vote_type },
+    })
 
     // Recalculate votes_count for answer (only count 'helpful' votes)
-    const { data: votes } = await supabase
-      .from('forum_answer_votes')
-      .select('id', { count: 'exact' })
-      .eq('answer_id', answerId)
-      .eq('vote_type', 'helpful')
+    const votesCount = await prisma.forumAnswerVote.count({
+      where: { answerId, voteType: 'helpful' },
+    })
 
-    const votesCount = votes?.length || 0
-
-    await supabase
-      .from('forum_answers')
-      .update({ votes_count: votesCount })
-      .eq('id', answerId)
+    await prisma.forumAnswer.update({
+      where: { id: answerId },
+      data: { votesCount },
+    })
 
     return NextResponse.json({
       success: true,
@@ -80,42 +46,25 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const userId = auth.user.id
 
     const answerId = params.id
 
     // Delete vote
-    await supabase
-      .from('forum_answer_votes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('answer_id', answerId)
+    await prisma.forumAnswerVote.deleteMany({ where: { userId, answerId } })
 
     // Recalculate votes_count
-    const { data: votes } = await supabase
-      .from('forum_answer_votes')
-      .select('id', { count: 'exact' })
-      .eq('answer_id', answerId)
-      .eq('vote_type', 'helpful')
+    const votesCount = await prisma.forumAnswerVote.count({
+      where: { answerId, voteType: 'helpful' },
+    })
 
-    const votesCount = votes?.length || 0
-
-    await supabase
-      .from('forum_answers')
-      .update({ votes_count: votesCount })
-      .eq('id', answerId)
+    await prisma.forumAnswer.update({
+      where: { id: answerId },
+      data: { votesCount },
+    })
 
     return NextResponse.json({
       success: true,

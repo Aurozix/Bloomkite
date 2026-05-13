@@ -1,24 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+
+import { requireAuth } from '@/lib/auth-helpers'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 export async function POST(request: NextRequest) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const userId = auth.user.id
 
     const body = await request.json()
     const { image, filename } = body
@@ -39,7 +31,8 @@ const supabase = createClient(supabaseUrl, supabaseKey)
     const storagePath = `articles/temp/${userId}/${timestamp}-${Date.now()}.${ext}`
 
     // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    const { error } = await supabase.storage
       .from('articles')
       .upload(storagePath, buffer, {
         contentType: 'image/*',

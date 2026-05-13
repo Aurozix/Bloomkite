@@ -1,9 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 interface SaveCalculatorRequest {
   calculator_type: string
@@ -15,29 +13,9 @@ interface SaveCalculatorRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    })
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const body: SaveCalculatorRequest = await request.json()
 
@@ -48,21 +26,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data, error } = await supabase.from('financial_plans').insert({
-      user_id: user.id,
-      calculator_type: body.calculator_type,
-      name: body.name || `${body.calculator_type} - ${new Date().toLocaleString()}`,
-      inputs: body.inputs,
-      results: body.results,
-      is_draft: body.is_draft,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-
-    if (error) {
+    let data
+    try {
+      data = await prisma.financialPlan.create({
+        data: {
+          userId: user.id,
+          calculatorType: body.calculator_type,
+          name: body.name || `${body.calculator_type} - ${new Date().toLocaleString()}`,
+          inputs: body.inputs as any,
+          results: body.results as any,
+          isDraft: body.is_draft,
+        },
+      })
+    } catch (error) {
       console.error('Error saving calculator result:', error)
+      const message = error instanceof Error ? error.message : 'Unknown error'
       return NextResponse.json(
-        { error: 'Failed to save calculator result', details: error.message },
+        { error: 'Failed to save calculator result', details: message },
         { status: 500 }
       )
     }
@@ -76,15 +56,15 @@ export async function POST(request: NextRequest) {
       typeof (body.results as { riskCategory?: unknown }).riskCategory === 'string'
     ) {
       const riskCategory = (body.results as { riskCategory: string }).riskCategory
-      const { error: profileError } = await supabase
-        .from('investor_profiles')
-        .update({
-          risk_profile: riskCategory,
-          updated_at: new Date().toISOString(),
+      try {
+        await prisma.investorProfile.update({
+          where: { userId: user.id },
+          data: {
+            riskProfile: riskCategory,
+            updatedAt: new Date(),
+          },
         })
-        .eq('user_id', user.id)
-
-      if (profileError) {
+      } catch (profileError) {
         // Don't fail the whole request — the plan is saved; profile mirroring
         // is best-effort. Log so we notice if it stops working.
         console.error('Failed to sync risk_profile to investor_profile:', profileError)

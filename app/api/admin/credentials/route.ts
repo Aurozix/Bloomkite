@@ -1,53 +1,47 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireRole } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
+    const auth = await requireRole('admin')
+    if ('error' in auth) return auth.error
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check admin role
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select('role:roles(name)')
-      .eq('user_id', payload.sub)
-
-    const isAdmin = userRoles?.some((ur: any) => ur.role?.name === 'admin')
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
-    const { data, error } = await supabase
-      .from('advisor_credentials')
-      .select(
-        'id, credential_type, issuer, license_number, file_url, status, created_at, user:users(id, display_name, email)'
-      )
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    let data
+    try {
+      data = await prisma.advisorCredential.findMany({
+        where: { status: 'pending' },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+      })
+    } catch (error) {
+      console.error('Get credentials error:', error)
       return NextResponse.json({ error: 'Failed to fetch credentials' }, { status: 500 })
     }
 
+    const formatted = data.map((c) => {
+      const userShape = c.user
+        ? { id: c.user.id, display_name: c.user.name, email: c.user.email }
+        : null
+      return {
+        id: c.id,
+        credential_type: c.credentialType,
+        issuer: c.issuer,
+        license_number: c.licenseNumber,
+        file_url: c.fileUrl,
+        status: c.status,
+        created_at: c.createdAt,
+        user: userShape,
+        advisor: userShape,
+      }
+    })
+
     return NextResponse.json({
       success: true,
-      data: data?.map((c: any) => ({
-        ...c,
-        advisor: c.user,
-      })) || [],
+      data: formatted,
     })
   } catch (error) {
     console.error('Get credentials error:', error)

@@ -1,70 +1,55 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+function serializeCredential(c: any) {
+  return {
+    id: c.id,
+    user_id: c.userId,
+    credential_type: c.credentialType,
+    issuer: c.issuer,
+    license_number: c.licenseNumber,
+    expiry_date: c.expiryDate,
+    file_url: c.fileUrl,
+    status: c.status,
+    rejection_reason: c.rejectionReason,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
+    const data = await prisma.advisorCredential.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
     })
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 401 })
-    }
-
-    const { data, error } = await supabase
-      .from('advisor_credentials')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching credentials:', error)
-      return NextResponse.json({ error: 'Failed to fetch credentials' }, { status: 500 })
-    }
 
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: data.map(serializeCredential),
     })
   } catch (error) {
     console.error('Get credentials error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch credentials' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Decode JWT to get user ID
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
+    const userId = user.id
 
     const body = await request.json()
     const { credential_type, issuer, license_number, expiry_date, file_base64, file_name } = body
@@ -74,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload file to Supabase Storage if provided
-    let file_url = null
+    let file_url: string | null = null
     if (file_base64 && file_name) {
       const supabaseStorage = createClient(supabaseUrl, supabaseKey)
 
@@ -103,31 +88,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert credential record
-    const supabaseServiceRole = createClient(supabaseUrl, supabaseKey)
-
-    const { data, error } = await supabaseServiceRole
-      .from('advisor_credentials')
-      .insert({
-        user_id: userId,
-        credential_type,
+    const data = await prisma.advisorCredential.create({
+      data: {
+        userId,
+        credentialType: credential_type,
         issuer,
-        license_number,
-        expiry_date,
-        file_url,
+        licenseNumber: license_number,
+        expiryDate: expiry_date ? new Date(expiry_date) : null,
+        fileUrl: file_url,
         status: 'pending',
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error inserting credential:', error)
-      return NextResponse.json({ error: 'Failed to create credential' }, { status: 500 })
-    }
+      },
+    })
 
     return NextResponse.json({
       success: true,
       message: 'Credential uploaded successfully, pending admin approval',
-      data,
+      data: serializeCredential(data),
     })
   } catch (error) {
     console.error('Create credential error:', error)

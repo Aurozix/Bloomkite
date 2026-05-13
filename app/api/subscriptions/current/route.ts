@@ -1,30 +1,15 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { getActiveTier } from '@/lib/subscriptions/tier'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { getActiveTier } from '@/lib/subscriptions/tier'
 
 export async function GET(_request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    })
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const tier = await getActiveTier(supabase, user.id)
+    const tier = await getActiveTier(user.id)
     return NextResponse.json({ success: true, data: tier })
   } catch (err) {
     console.error('Current subscription error:', err)

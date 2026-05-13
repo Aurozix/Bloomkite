@@ -1,24 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+
+function serializeAnswer(a: any) {
+  const { author, ...rest } = a
+  return {
+    id: rest.id,
+    content: rest.content,
+    votes_count: rest.votesCount,
+    is_best_answer: rest.isBestAnswer,
+    created_at: rest.createdAt,
+    author: author
+      ? { id: author.id, email: author.email, full_name: author.name }
+      : null,
+  }
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const questionId = params.id
     const body = await request.json()
@@ -29,41 +32,39 @@ const supabase = createClient(supabaseUrl, supabaseKey)
     }
 
     // Create answer
-    const { data: answer, error: aError } = await supabase
-      .from('forum_answers')
-      .insert({
-        author_id: userId,
-        question_id: questionId,
-        content,
-        votes_count: 0,
-        is_best_answer: false,
+    let answer
+    try {
+      answer = await prisma.forumAnswer.create({
+        data: {
+          authorId: user.id,
+          questionId,
+          content,
+          votesCount: 0,
+          isBestAnswer: false,
+        },
+        include: {
+          author: { select: { id: true, email: true, name: true } },
+        },
       })
-      .select('id, content, votes_count, is_best_answer, created_at, author:users(id, email, full_name)')
-      .single()
-
-    if (aError) {
-      console.error('Insert answer error:', aError)
+    } catch (error) {
+      console.error('Insert answer error:', error)
       return NextResponse.json({ error: 'Failed to create answer' }, { status: 500 })
     }
 
-    // Get current answer count
-    const { data: questionData } = await supabase
-      .from('forum_questions')
-      .select('answer_count')
-      .eq('id', questionId)
-      .single()
-
-    if (questionData) {
-      await supabase
-        .from('forum_questions')
-        .update({ answer_count: (questionData.answer_count || 0) + 1 })
-        .eq('id', questionId)
+    // Bump answer_count on the question.
+    try {
+      await prisma.forumQuestion.update({
+        where: { id: questionId },
+        data: { answerCount: { increment: 1 } },
+      })
+    } catch (countErr) {
+      console.error('Failed to bump answer_count:', countErr)
     }
 
     return NextResponse.json({
       success: true,
       message: 'Answer created',
-      data: answer,
+      data: serializeAnswer(answer),
     })
   } catch (error) {
     console.error('Create answer error:', error)

@@ -5,6 +5,7 @@ import { ToastProvider } from './components/toast-context'
 import { ToastContainer } from './components/toast-container'
 import { ColorSchemeProvider } from './components/color-scheme-context'
 import { Navbar } from './components/Navbar'
+import { Providers } from './providers'
 
 // Bloomkite Brand v1.0 typography — see docs/branding/brand.md §6.
 // Fraunces handles display/editorial, Inter handles body/UI, JetBrains Mono
@@ -51,15 +52,17 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="font-sans bg-paper text-ink-900 antialiased">
-        <ColorSchemeProvider>
-          <ToastProvider>
-            <div className="min-h-screen flex flex-col">
-              <Navbar />
-              <main className="flex-1">{children}</main>
-            </div>
-            <ToastContainer />
-          </ToastProvider>
-        </ColorSchemeProvider>
+        <Providers>
+          <ColorSchemeProvider>
+            <ToastProvider>
+              <div className="min-h-screen flex flex-col">
+                <Navbar />
+                <main className="flex-1">{children}</main>
+              </div>
+              <ToastContainer />
+            </ToastProvider>
+          </ColorSchemeProvider>
+        </Providers>
       </body>
     </html>
   )

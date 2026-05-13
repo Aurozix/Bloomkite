@@ -1,55 +1,49 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireRole } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check admin role
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-
-    // Verify admin role (simplified - in production use proper role checking)
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select('role:roles(name)')
-      .eq('user_id', payload.sub)
-
-    const isAdmin = userRoles?.some((ur: any) => ur.role?.name === 'admin')
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
+    const auth = await requireRole('admin')
+    if ('error' in auth) return auth.error
 
     // Get pending articles
-    const { data, error } = await supabase
-      .from('articles')
-      .select(
-        `
-        *,
-        author:users(id, email, full_name)
-      `
-      )
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    let data
+    try {
+      data = await prisma.article.findMany({
+        where: { status: 'pending' },
+        include: {
+          author: { select: { id: true, email: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    } catch (error) {
+      console.error('Fetch pending articles error:', error)
       return NextResponse.json({ error: 'Failed to fetch articles' }, { status: 500 })
     }
 
+    const formatted = data.map((a) => ({
+      id: a.id,
+      author_id: a.authorId,
+      title: a.title,
+      content: a.content,
+      category: a.category,
+      tags: a.tags,
+      featured_image_url: a.featuredImageUrl,
+      status: a.status,
+      rejection_reason: a.rejectionReason,
+      published_at: a.publishedAt,
+      created_at: a.createdAt,
+      updated_at: a.updatedAt,
+      author: a.author
+        ? { id: a.author.id, email: a.author.email, full_name: a.author.name }
+        : null,
+    }))
+
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: formatted,
     })
   } catch (error) {
     console.error('Get pending articles error:', error)

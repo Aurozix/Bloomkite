@@ -1,57 +1,60 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
-async function getUserId(accessToken: string): Promise<string | null> {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-  })
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user?.id ?? null
+function serializeProfile(p: any) {
+  if (!p) return null
+  return {
+    id: p.id,
+    user_id: p.userId,
+    display_name: p.displayName,
+    phone_number: p.phoneNumber,
+    date_of_birth: p.dateOfBirth,
+    gender: p.gender,
+    company_name: p.companyName,
+    designation: p.designation,
+    pan_number: p.panNumber,
+    gst_number: p.gstNumber,
+    address_line1: p.addressLine1,
+    address_line2: p.addressLine2,
+    city: p.city,
+    state: p.state,
+    pincode: p.pincode,
+    website_url: p.websiteUrl,
+    bio: p.bio,
+    profile_image_url: p.profileImageUrl,
+    workflow_status: p.workflowStatus,
+    approved_by: p.approvedBy,
+    approved_at: p.approvedAt,
+    is_verified: p.isVerified,
+    verified_at: p.verifiedAt,
+    follower_count: p.followerCount,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const data = await prisma.advisorProfile.findUnique({
+      where: { userId: user.id },
+    })
 
-    const userId = await getUserId(accessToken)
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const expertiseRows = await prisma.advisorExpertise.findMany({
+      where: { userId: user.id },
+      select: { specialization: true },
+    })
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-    const { data, error } = await supabase
-      .from('advisor_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching advisor profile:', error)
-      return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
-    }
-
-    const { data: expertiseRows } = await supabase
-      .from('advisor_expertise')
-      .select('specialization')
-      .eq('user_id', userId)
-
-    const expertise = (expertiseRows ?? []).map((r: any) => r.specialization)
+    const expertise = expertiseRows.map((r) => r.specialization)
 
     return NextResponse.json({
       success: true,
-      data: data ? { ...data, expertise } : null,
+      data: data ? { ...serializeProfile(data), expertise } : null,
     })
   } catch (error) {
     console.error('Advisor profile GET error:', error)
@@ -61,17 +64,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userId = await getUserId(accessToken)
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const body = await request.json()
     const {
@@ -86,25 +81,23 @@ export async function PUT(request: NextRequest) {
       expertise,
     } = body
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-    const { data, error } = await supabase
-      .from('advisor_profiles')
-      .update({
-        display_name: display_name || null,
-        bio: bio || null,
-        company_name: company_name || null,
-        designation: designation || null,
-        city: city || null,
-        state: state || null,
-        website_url: website_url || null,
-        phone_number: phone_number || null,
-        updated_at: new Date().toISOString(),
+    let data
+    try {
+      data = await prisma.advisorProfile.update({
+        where: { userId: user.id },
+        data: {
+          displayName: display_name || null,
+          bio: bio || null,
+          companyName: company_name || null,
+          designation: designation || null,
+          city: city || null,
+          state: state || null,
+          websiteUrl: website_url || null,
+          phoneNumber: phone_number || null,
+          updatedAt: new Date(),
+        },
       })
-      .eq('user_id', userId)
-      .select()
-      .single()
-
-    if (error) {
+    } catch (error) {
       console.error('Error updating advisor profile:', error)
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
     }
@@ -116,31 +109,26 @@ export async function PUT(request: NextRequest) {
         .map((s: unknown) => (typeof s === 'string' ? s.trim() : ''))
         .filter((s) => s.length > 0)
 
-      const { error: delError } = await supabase
-        .from('advisor_expertise')
-        .delete()
-        .eq('user_id', userId)
-
-      if (delError) {
-        console.error('Error clearing expertise:', delError)
-      } else if (cleaned.length > 0) {
-        const rows = cleaned.map((specialization) => ({
-          user_id: userId,
-          specialization,
-        }))
-        const { error: insError } = await supabase
-          .from('advisor_expertise')
-          .insert(rows)
-        if (insError) {
-          console.error('Error inserting expertise:', insError)
+      try {
+        await prisma.advisorExpertise.deleteMany({ where: { userId: user.id } })
+        if (cleaned.length > 0) {
+          await prisma.advisorExpertise.createMany({
+            data: cleaned.map((specialization) => ({
+              userId: user.id,
+              specialization,
+            })),
+            skipDuplicates: true,
+          })
         }
+      } catch (expError) {
+        console.error('Error syncing expertise:', expError)
       }
     }
 
     return NextResponse.json({
       success: true,
       message: 'Profile updated successfully',
-      data,
+      data: serializeProfile(data),
     })
   } catch (error) {
     console.error('Advisor profile PUT error:', error)

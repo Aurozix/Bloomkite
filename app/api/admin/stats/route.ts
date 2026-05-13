@@ -1,57 +1,20 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireRole } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
+    const auth = await requireRole('admin')
+    if ('error' in auth) return auth.error
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check admin role
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select('role:roles(name)')
-      .eq('user_id', payload.sub)
-
-    const isAdmin = userRoles?.some((ur: any) => ur.role?.name === 'admin')
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
-
-    // Get total users count
-    const { count: totalUsers } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-
-    // Get verified advisors count
-    const { count: totalAdvisors } = await supabase
-      .from('advisor_profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_verified', true)
-
-    // Get pending credentials count
-    const { count: pendingCredentials } = await supabase
-      .from('advisor_credentials')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending')
-
-    // Get pending articles count
-    const { count: pendingArticles } = await supabase
-      .from('articles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending')
+    const [totalUsers, totalAdvisors, pendingCredentials, pendingArticles] =
+      await Promise.all([
+        prisma.user.count(),
+        prisma.advisorProfile.count({ where: { isVerified: true } }),
+        prisma.advisorCredential.count({ where: { status: 'pending' } }),
+        prisma.article.count({ where: { status: 'pending' } }),
+      ])
 
     return NextResponse.json({
       success: true,

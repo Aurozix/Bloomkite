@@ -1,91 +1,47 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useToast } from '@/app/components/toast-context'
 import { Logo } from '@/app/components/Logo'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-export default function SignIn() {
+function SignInContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { addToast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [supabase, setSupabase] = useState<any>(null)
-
-  useEffect(() => {
-    setSupabase(createClient(supabaseUrl, supabaseAnonKey))
-  }, [])
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+
   const handleGoogleSignIn = async () => {
-    if (!supabase) return
-
     setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) {
-        console.error('Sign in error:', error)
-      }
-    } catch (err) {
-      console.error('Unexpected error:', err)
-    } finally {
-      setLoading(false)
-    }
+    await signIn('google', { callbackUrl })
   }
 
   const handleEmailSignIn = async () => {
-    if (!supabase || !email || !password) {
+    if (!email || !password) {
       addToast('Please enter email and password', 'error')
       return
     }
 
     setLoading(true)
     try {
-      const { error, data } = await supabase.auth.signInWithPassword({
+      const result = await signIn('credentials', {
         email,
         password,
+        redirect: false,
       })
 
-      if (error) {
-        console.error('Email sign in error:', error)
-        addToast(error.message || 'Sign in failed', 'error')
+      if (result?.error) {
+        addToast('Invalid email, password, or unverified account', 'error')
         return
       }
 
-      // Store session in localStorage and cookies
-      if (data.session) {
-        const projectId = supabaseUrl?.split('.')[0].split('//')[1] || 'local'
-        localStorage.setItem(
-          `sb-${projectId}-auth-token`,
-          JSON.stringify(data.session)
-        )
-
-        // Also set cookies for server-side session verification
-        await fetch('/api/auth/set-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          }),
-        })
-      }
-
-      router.push('/auth/role-selection')
-    } catch (err) {
-      console.error('Unexpected error:', err)
-      addToast('An unexpected error occurred', 'error')
+      router.push(callbackUrl)
+      router.refresh()
     } finally {
       setLoading(false)
     }
@@ -94,21 +50,17 @@ export default function SignIn() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
             <Logo size={56} />
           </div>
-          <h1 className="text-4xl font-bold gradient-text mb-3">
-            Bloomkite
-          </h1>
+          <h1 className="text-4xl font-bold gradient-text mb-3">Bloomkite</h1>
           <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
           <p className="mt-3 text-gray-600 text-lg">
             Start your journey to financial freedom
           </p>
         </div>
 
-        {/* Sign In Card */}
         <div className="card p-8 space-y-6 mb-6">
           <div className="space-y-3">
             <input
@@ -125,8 +77,8 @@ export default function SignIn() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
               onKeyDown={(e) => e.key === 'Enter' && handleEmailSignIn()}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
             />
             <button
               onClick={handleEmailSignIn}
@@ -135,6 +87,14 @@ export default function SignIn() {
             >
               {loading ? 'Signing in...' : 'Sign In with Email'}
             </button>
+            <div className="text-right">
+              <a
+                href="/auth/forgot-password"
+                className="text-sm text-blue-600 font-semibold hover:underline"
+              >
+                Forgot password?
+              </a>
+            </div>
           </div>
 
           <div className="relative">
@@ -151,21 +111,11 @@ export default function SignIn() {
             disabled={loading}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-gray-200 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? (
-              <>
-                <div className="animate-spin h-5 w-5 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--primary-600)', borderTopColor: 'transparent' }}></div>
-                <span>Signing in...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032 c0-3.331,2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.461,2.268,15.365,1.25,12.545,1.25 c-6.343,0-11.5,5.157-11.5,11.5c0,6.343,5.157,11.5,11.5,11.5c11.5,0,11.5-11.5,11.5-11.5" />
-                </svg>
-                <span>Sign in with Google</span>
-              </>
-            )}
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032 c0-3.331,2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.461,2.268,15.365,1.25,12.545,1.25 c-6.343,0-11.5,5.157-11.5,11.5c0,6.343,5.157,11.5,11.5,11.5c11.5,0,11.5-11.5,11.5-11.5" />
+            </svg>
+            <span>Sign in with Google</span>
           </button>
-
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -177,14 +127,13 @@ export default function SignIn() {
           </div>
 
           <button
-            onClick={() => router.push('/auth/role-selection')}
+            onClick={() => router.push('/auth/signup')}
             className="btn-primary w-full text-lg"
           >
             Create Account
           </button>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-sm text-gray-600">
           By signing in, you agree to our{' '}
           <a href="#" className="text-blue-600 font-semibold hover:underline">
@@ -197,5 +146,13 @@ export default function SignIn() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={null}>
+      <SignInContent />
+    </Suspense>
   )
 }

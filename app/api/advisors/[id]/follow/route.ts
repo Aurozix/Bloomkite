@@ -1,35 +1,22 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Decode JWT to get investor ID
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const investorId = payload.sub
-
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const investorId = auth.user.id
     const advisorId = params.id
 
     // Check if already following
-    const { data: existingFollow } = await supabase
-      .from('advisor_followers')
-      .select('id')
-      .eq('investor_id', investorId)
-      .eq('advisor_id', advisorId)
-      .single()
+    const existingFollow = await prisma.advisorFollower.findUnique({
+      where: {
+        investorId_advisorId: { investorId, advisorId },
+      },
+      select: { id: true },
+    })
 
     if (existingFollow) {
       return NextResponse.json(
@@ -39,16 +26,12 @@ const supabase = createClient(supabaseUrl, supabaseKey)
     }
 
     // Create follow
-    const { data, error } = await supabase
-      .from('advisor_followers')
-      .insert({
-        investor_id: investorId,
-        advisor_id: advisorId,
+    let data
+    try {
+      data = await prisma.advisorFollower.create({
+        data: { investorId, advisorId },
       })
-      .select()
-      .single()
-
-    if (error) {
+    } catch (error) {
       console.error('Error creating follow:', error)
       return NextResponse.json({ error: 'Failed to follow advisor' }, { status: 500 })
     }
@@ -56,7 +39,12 @@ const supabase = createClient(supabaseUrl, supabaseKey)
     return NextResponse.json({
       success: true,
       message: 'Now following this advisor',
-      data,
+      data: {
+        id: data.id,
+        investor_id: data.investorId,
+        advisor_id: data.advisorId,
+        created_at: data.createdAt,
+      },
     })
   } catch (error) {
     console.error('Follow error:', error)
@@ -65,31 +53,17 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Decode JWT to get investor ID
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const investorId = payload.sub
-
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const investorId = auth.user.id
     const advisorId = params.id
 
-    // Delete follow
-    const { error } = await supabase
-      .from('advisor_followers')
-      .delete()
-      .eq('investor_id', investorId)
-      .eq('advisor_id', advisorId)
-
-    if (error) {
+    try {
+      await prisma.advisorFollower.deleteMany({
+        where: { investorId, advisorId },
+      })
+    } catch (error) {
       console.error('Error deleting follow:', error)
       return NextResponse.json({ error: 'Failed to unfollow advisor' }, { status: 500 })
     }

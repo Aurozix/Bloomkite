@@ -1,32 +1,28 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { signOut, useSession } from 'next-auth/react'
 import { ArrowRightOnRectangleIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { Logo } from './Logo'
-
-interface SessionUser {
-  id: string
-  email: string
-  roles: string[]
-  current_role: string | null
-}
 
 // Routes where the Navbar should NOT render. Auth screens get their own layout.
 const HIDDEN_ON: ReadonlyArray<string> = [
   '/auth/signin',
+  '/auth/signup',
   '/auth/role-selection',
-  '/auth/callback',
+  '/auth/check-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
 ]
 
-// Public-facing links shown to everyone (signed in or not).
 const PUBLIC_LINKS: Array<{ label: string; href: string }> = [
   { label: 'Advisors', href: '/advisors' },
   { label: 'Articles', href: '/articles' },
   { label: 'Forum', href: '/forum' },
 ]
 
-// Role-specific links shown only to authenticated users in that role.
 const ROLE_LINKS: Record<string, Array<{ label: string; href: string }>> = {
   investor: [
     { label: 'Dashboard', href: '/dashboard' },
@@ -46,54 +42,30 @@ const ROLE_LINKS: Record<string, Array<{ label: string; href: string }>> = {
 export function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
+  const { data: session, update } = useSession()
 
-  const [user, setUser] = useState<SessionUser | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
-
-  // Fetch the session whenever the route changes. Cheap GET, returns null user
-  // when unauthenticated, so it doubles as the gate for which links to show.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/auth/session')
-      .then((r) => r.json())
-      .then(({ user }) => {
-        if (!cancelled) setUser(user ?? null)
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [pathname])
 
   if (HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return null
   }
 
-  const roleLinks =
-    user?.current_role && ROLE_LINKS[user.current_role]
-      ? ROLE_LINKS[user.current_role]
-      : []
+  const user = session?.user ?? null
+  const currentRole = user?.currentRole ?? null
+  const roleLinks = currentRole && ROLE_LINKS[currentRole] ? ROLE_LINKS[currentRole] : []
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    setUser(null)
     setMenuOpen(false)
-    router.push('/')
+    await signOut({ callbackUrl: '/' })
   }
 
   const handleSwitchRole = async (newRole: string) => {
-    if (!user || switching || newRole === user.current_role) return
+    if (!user || switching || newRole === currentRole) return
     setSwitching(true)
     try {
-      const resp = await fetch('/api/auth/switch-role', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      })
-      if (resp.ok) setUser({ ...user, current_role: newRole })
+      await update({ currentRole: newRole })
+      router.refresh()
     } finally {
       setSwitching(false)
       setMenuOpen(false)
@@ -133,11 +105,11 @@ export function Navbar() {
                 aria-expanded={menuOpen}
               >
                 <span className="text-sm font-medium text-ink-600 hidden sm:inline">
-                  {user.email.split('@')[0]}
+                  {user.email?.split('@')[0]}
                 </span>
-                {user.current_role && (
+                {currentRole && (
                   <span className="text-xs font-semibold uppercase tracking-wider text-forest-500 bg-forest-50 px-2 py-0.5 rounded-full">
-                    {user.current_role}
+                    {currentRole}
                   </span>
                 )}
                 <ChevronDownIcon className="h-4 w-4 text-ink-400" />
@@ -147,23 +119,19 @@ export function Navbar() {
                 <div className="absolute right-0 mt-2 w-56 bg-white border border-ink-200 rounded-lg shadow-lg overflow-hidden">
                   <div className="px-4 py-3 border-b border-ink-200">
                     <p className="text-sm text-ink-400">Signed in as</p>
-                    <p className="text-sm font-semibold text-ink-900 truncate">
-                      {user.email}
-                    </p>
+                    <p className="text-sm font-semibold text-ink-900 truncate">{user.email}</p>
                   </div>
                   {user.roles.length > 1 && (
                     <div className="px-4 py-3 border-b border-ink-200">
-                      <p className="text-xs uppercase text-ink-400 mb-2">
-                        Switch role
-                      </p>
+                      <p className="text-xs uppercase text-ink-400 mb-2">Switch role</p>
                       <div className="flex flex-wrap gap-2">
                         {user.roles.map((r) => (
                           <button
                             key={r}
                             onClick={() => handleSwitchRole(r)}
-                            disabled={switching || r === user.current_role}
+                            disabled={switching || r === currentRole}
                             className={`text-xs px-2 py-1 rounded ${
-                              r === user.current_role
+                              r === currentRole
                                 ? 'bg-forest-400 text-paper'
                                 : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
                             } disabled:opacity-60`}
@@ -211,9 +179,7 @@ function NavLink({
     <a
       href={href}
       className={`text-sm font-medium transition-colors ${
-        active
-          ? 'text-forest-700'
-          : 'text-ink-600 hover:text-ink-900'
+        active ? 'text-forest-700' : 'text-ink-600 hover:text-ink-900'
       }`}
     >
       {children}

@@ -1,11 +1,25 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 import { getPaymentProvider } from '@/lib/subscriptions/provider'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+function serializeSubscription(s: any) {
+  return {
+    id: s.id,
+    user_id: s.userId,
+    plan_id: s.planId,
+    status: s.status,
+    razorpay_order_id: s.razorpayOrderId,
+    razorpay_subscription_id: s.razorpaySubscriptionId,
+    razorpay_payment_id: s.razorpayPaymentId,
+    current_period_start: s.currentPeriodStart,
+    current_period_end: s.currentPeriodEnd,
+    cancelled_at: s.cancelledAt,
+    created_at: s.createdAt,
+    updated_at: s.updatedAt,
+  }
+}
 
 // Create a pending subscription + a payment-provider order. The frontend then
 // either:
@@ -13,22 +27,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 //   - live mode: hands the orderId to the Razorpay Checkout JS SDK
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    })
-    const {
-      data: { user },
-    } = await userClient.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
     const body = await request.json()
     const planSlug: string | undefined = body?.plan_slug
@@ -36,71 +37,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'plan_slug is required' }, { status: 400 })
     }
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey)
+    const plan = await prisma.subscriptionPlan.findFirst({
+      where: { slug: planSlug, isActive: true },
+      select: { id: true, slug: true, name: true, priceInrPaise: true },
+    })
 
-    const { data: plan, error: planErr } = await admin
-      .from('subscription_plans')
-      .select('id, slug, name, price_inr_paise')
-      .eq('slug', planSlug)
-      .eq('is_active', true)
-      .single()
-
-    if (planErr || !plan) {
+    if (!plan) {
       return NextResponse.json({ error: 'Unknown plan' }, { status: 404 })
     }
+
+    const priceInrPaise = Number(plan.priceInrPaise)
 
     // Free tier: no payment needed; mark a subscription active for 100 years
     // so the gating layer sees it. (We could also just rely on the free
     // default in tier.ts — but writing a row keeps history coherent.)
-    if (plan.price_inr_paise === 0) {
+    if (priceInrPaise === 0) {
       const now = new Date()
       const farFuture = new Date(now)
       farFuture.setFullYear(farFuture.getFullYear() + 100)
 
-      const { data: sub, error: subErr } = await admin
-        .from('subscriptions')
-        .insert({
-          user_id: user.id,
-          plan_id: plan.id,
-          status: 'active',
-          current_period_start: now.toISOString(),
-          current_period_end: farFuture.toISOString(),
+      let sub
+      try {
+        sub = await prisma.subscription.create({
+          data: {
+            userId: user.id,
+            planId: plan.id,
+            status: 'active',
+            currentPeriodStart: now,
+            currentPeriodEnd: farFuture,
+          },
         })
-        .select()
-        .single()
-
-      if (subErr) {
+      } catch (subErr) {
         console.error('Free subscription insert error:', subErr)
         return NextResponse.json({ error: 'Failed to activate free plan' }, { status: 500 })
       }
 
       return NextResponse.json({
         success: true,
-        data: { subscription: sub, requires_payment: false },
+        data: { subscription: serializeSubscription(sub), requires_payment: false },
       })
     }
 
     const provider = getPaymentProvider()
     const receipt = `bk_${user.id.slice(0, 8)}_${Date.now()}`
     const order = await provider.createOrder({
-      amountPaise: plan.price_inr_paise,
+      amountPaise: priceInrPaise,
       currency: 'INR',
       receipt,
       notes: { plan_slug: plan.slug, user_id: user.id },
     })
 
-    const { data: sub, error: subErr } = await admin
-      .from('subscriptions')
-      .insert({
-        user_id: user.id,
-        plan_id: plan.id,
-        status: 'pending',
-        razorpay_order_id: order.orderId,
+    let sub
+    try {
+      sub = await prisma.subscription.create({
+        data: {
+          userId: user.id,
+          planId: plan.id,
+          status: 'pending',
+          razorpayOrderId: order.orderId,
+        },
       })
-      .select()
-      .single()
-
-    if (subErr) {
+    } catch (subErr) {
       console.error('Pending subscription insert error:', subErr)
       return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })
     }
@@ -108,7 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        subscription: sub,
+        subscription: serializeSubscription(sub),
         order,
         provider: provider.name,
         requires_payment: true,

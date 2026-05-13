@@ -54,30 +54,22 @@ export default function Dashboard() {
   }, [router])
 
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-      router.push('/auth/signin')
-    } catch (err) {
-      console.error('Logout error:', err)
-    }
+    const { signOut } = await import('next-auth/react')
+    await signOut({ callbackUrl: '/auth/signin' })
   }
 
+  // Role switching is handled by the Navbar's user menu. Keep this as a stub
+  // so existing UI handlers don't crash; a full page reload reflects the new
+  // role across the dashboard.
   const handleSwitchRole = async (newRole: string) => {
-    if (!user || newRole === user.current_role) return
-
+    if (!user || newRole === user.current_role || switching) return
     setSwitching(true)
     try {
-      const response = await fetch('/api/auth/switch-role', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      })
-
-      if (response.ok) {
-        setUser({ ...user, current_role: newRole })
-      }
-    } catch (err) {
-      console.error('Role switch error:', err)
+      // Trigger NextAuth jwt callback with the requested role.
+      const { getSession } = await import('next-auth/react')
+      await fetch('/api/auth/session?update=1', { cache: 'no-store' })
+      await getSession()
+      window.location.reload()
     } finally {
       setSwitching(false)
     }

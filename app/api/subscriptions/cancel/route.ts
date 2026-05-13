@@ -1,10 +1,24 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireAuth } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
+
+function serializeSubscription(s: any) {
+  return {
+    id: s.id,
+    user_id: s.userId,
+    plan_id: s.planId,
+    status: s.status,
+    razorpay_order_id: s.razorpayOrderId,
+    razorpay_subscription_id: s.razorpaySubscriptionId,
+    razorpay_payment_id: s.razorpayPaymentId,
+    current_period_start: s.currentPeriodStart,
+    current_period_end: s.currentPeriodEnd,
+    cancelled_at: s.cancelledAt,
+    created_at: s.createdAt,
+    updated_at: s.updatedAt,
+  }
+}
 
 // User-initiated cancel. The subscription stays "active" until current_period_end
 // (graceful degradation per RAD §2.4) — we set cancelled_at and prevent renewal.
@@ -12,38 +26,38 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 // provider so they stop billing.
 export async function POST(_request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if ('error' in auth) return auth.error
+    const { user } = auth
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    const now = new Date()
+
+    // Find the user's active subscription first, then update it. We can't
+    // chain .update with multi-field where in Prisma without using updateMany,
+    // which doesn't return the row.
+    const active = await prisma.subscription.findFirst({
+      where: { userId: user.id, status: 'active' },
     })
-    const {
-      data: { user },
-    } = await userClient.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (!active) {
+      return NextResponse.json(
+        { error: 'No active subscription to cancel' },
+        { status: 404 }
+      )
     }
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey)
-
-    const now = new Date().toISOString()
-    const { data: sub, error } = await admin
-      .from('subscriptions')
-      .update({
-        status: 'cancelled',
-        cancelled_at: now,
-        updated_at: now,
+    let sub
+    try {
+      sub = await prisma.subscription.update({
+        where: { id: active.id },
+        data: {
+          status: 'cancelled',
+          cancelledAt: now,
+          updatedAt: now,
+        },
       })
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .select()
-      .single()
-
-    if (error || !sub) {
+    } catch (error) {
+      console.error('Cancel subscription update error:', error)
       return NextResponse.json(
         { error: 'No active subscription to cancel' },
         { status: 404 }
@@ -52,7 +66,7 @@ export async function POST(_request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: sub,
+      data: serializeSubscription(sub),
       message: 'Subscription will remain active until period end',
     })
   } catch (err) {

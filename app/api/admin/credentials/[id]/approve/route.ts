@@ -1,56 +1,46 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+import { requireRole } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db'
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-const supabase = createClient(supabaseUrl, supabaseKey)
-
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get('sb-access-token')?.value
-
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check admin role
-    const parts = accessToken.split('.')
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-
-    const { data: userRoles } = await supabase
-      .from('user_roles')
-      .select('role:roles(name)')
-      .eq('user_id', payload.sub)
-
-    const isAdmin = userRoles?.some((ur: any) => ur.role?.name === 'admin')
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-    }
+    const auth = await requireRole('admin')
+    if ('error' in auth) return auth.error
 
     const credentialId = params.id
 
-    const { data, error } = await supabase
-      .from('advisor_credentials')
-      .update({
-        status: 'approved',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', credentialId)
-      .eq('status', 'pending')
-      .select()
-      .single()
+    // Only approve if currently pending. Use updateMany to filter on status,
+    // then re-read.
+    const result = await prisma.advisorCredential.updateMany({
+      where: { id: credentialId, status: 'pending' },
+      data: { status: 'approved', updatedAt: new Date() },
+    })
 
-    if (error || !data) {
+    if (result.count === 0) {
       return NextResponse.json({ error: 'Credential not found or already processed' }, { status: 404 })
     }
+
+    const data = await prisma.advisorCredential.findUnique({ where: { id: credentialId } })
 
     return NextResponse.json({
       success: true,
       message: 'Credential approved',
-      data,
+      data: data
+        ? {
+            id: data.id,
+            user_id: data.userId,
+            credential_type: data.credentialType,
+            issuer: data.issuer,
+            license_number: data.licenseNumber,
+            expiry_date: data.expiryDate,
+            file_url: data.fileUrl,
+            status: data.status,
+            rejection_reason: data.rejectionReason,
+            created_at: data.createdAt,
+            updated_at: data.updatedAt,
+          }
+        : null,
     })
   } catch (error) {
     console.error('Approve credential error:', error)
