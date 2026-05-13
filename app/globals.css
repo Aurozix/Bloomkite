@@ -161,12 +161,18 @@ body {
   min-height: 100vh;
 }
 
-/* Display / editorial typography uses Fraunces. */
+/* Display / editorial typography uses Fraunces.
+ * Color is intentionally NOT set here. Body provides the default ink-900 via
+ * inheritance, and per-element color utilities (text-paper on Forest surfaces,
+ * text-saffron-400 for premium emphasis) must remain free to override without
+ * a specificity fight — listing .font-serif in the selector group raises the
+ * specificity of this rule to (0,1,0), tying with Tailwind utilities and
+ * winning on source order, which silently darkens every Forest-substrate
+ * heading. Don't reintroduce a color here. */
 h1, h2, h3, .font-serif {
   font-family: var(--font-fraunces), 'Fraunces', Georgia, 'Times New Roman', serif;
   font-feature-settings: "ss01";
   letter-spacing: -0.01em;
-  color: var(--bk-color-text-primary);
 }
 
 /* Numbers and financial data use a tabular monospace. */

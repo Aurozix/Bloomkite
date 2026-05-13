@@ -128,11 +128,11 @@ export function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((o) => !o)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 hover:bg-ink-100 transition"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
               >
-                <span className="text-sm font-medium text-gray-700 hidden sm:inline">
+                <span className="text-sm font-medium text-ink-600 hidden sm:inline">
                   {user.email.split('@')[0]}
                 </span>
                 {user.current_role && (
@@ -140,20 +140,20 @@ export function Navbar() {
                     {user.current_role}
                   </span>
                 )}
-                <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+                <ChevronDownIcon className="h-4 w-4 text-ink-400" />
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-sm text-gray-500">Signed in as</p>
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-ink-200 rounded-lg shadow-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-ink-200">
+                    <p className="text-sm text-ink-400">Signed in as</p>
+                    <p className="text-sm font-semibold text-ink-900 truncate">
                       {user.email}
                     </p>
                   </div>
                   {user.roles.length > 1 && (
-                    <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-xs uppercase text-gray-500 mb-2">
+                    <div className="px-4 py-3 border-b border-ink-200">
+                      <p className="text-xs uppercase text-ink-400 mb-2">
                         Switch role
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -164,8 +164,8 @@ export function Navbar() {
                             disabled={switching || r === user.current_role}
                             className={`text-xs px-2 py-1 rounded ${
                               r === user.current_role
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-forest-400 text-paper'
+                                : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
                             } disabled:opacity-60`}
                           >
                             {r}
@@ -176,7 +176,7 @@ export function Navbar() {
                   )}
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-ink-600 hover:bg-ink-100"
                   >
                     <ArrowRightOnRectangleIcon className="h-4 w-4" />
                     Sign out

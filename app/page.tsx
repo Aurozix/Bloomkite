@@ -28,9 +28,9 @@ export default function Home() {
             Verified advisor marketplace
           </span>
 
-          <h1 className="font-serif text-5xl md:text-7xl font-medium leading-[1.05] tracking-tight text-paper mb-6">
+          <h1 className="font-serif text-4xl md:text-6xl font-medium leading-[1.08] tracking-tight text-paper mb-6">
             Find an advisor on{' '}
-            <em className="text-forest-200 not-italic" style={{ fontStyle: 'italic' }}>
+            <em className="text-saffron-400 not-italic" style={{ fontStyle: 'italic' }}>
               merit
             </em>
             , not memory.
@@ -42,18 +42,12 @@ export default function Home() {
             before they appear on the platform. You see the result on every profile.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <a
               href="/advisors"
               className="px-6 py-3 rounded-bk-md font-semibold transition-colors bg-forest-400 hover:bg-forest-500 text-paper"
             >
               Browse verified advisors
-            </a>
-            <a
-              href="/auth/signin"
-              className="px-6 py-3 rounded-bk-md font-semibold transition-colors text-paper border border-paper/30 hover:bg-paper/10"
-            >
-              Sign in
             </a>
           </div>
         </div>
