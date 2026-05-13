@@ -16,6 +16,7 @@ import {
   HomeModernIcon,
   WalletIcon,
   ReceiptPercentIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -117,6 +118,13 @@ const calculators: Calculator[] = [
     description: 'How lump-sum prepayments shorten your loan tenure and save interest',
     icon: ReceiptPercentIcon,
     path: '/calculators/partial-payment',
+  },
+  {
+    id: 'emi-change',
+    name: 'EMI Change Impact',
+    description: 'Impact of raising or lowering your EMI mid-loan on tenure and interest',
+    icon: ArrowsRightLeftIcon,
+    path: '/calculators/emi-change',
   },
 ]
 

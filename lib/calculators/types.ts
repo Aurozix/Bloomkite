@@ -267,6 +267,48 @@ export interface PartialPaymentResult {
   newAmortisation: PartialPaymentRow[]
 }
 
+// EMI Change Impact Calculator: one or more mid-loan EMI changes. Rate is
+// fixed; principal isn't touched directly; the tenure adjusts to whatever the
+// running EMI sequence can amortize.
+export interface EmiChangeEntry {
+  emiChangedDate: string
+  newEmi: number
+}
+
+export interface EmiChangeInput {
+  loanAmount: number
+  interestRate: number
+  tenure: number
+  tenureType: EMITenureType
+  loanDate?: string
+  emiChangeReq: EmiChangeEntry[]
+}
+
+// Adds an `emiUsed` column so the row remains interpretable after the EMI
+// changes mid-stream (the principal/interest split alone doesn't reveal it).
+export interface EmiChangeRow extends EMIAmortizationRow {
+  emiUsed: string
+}
+
+export interface EmiChangeResult {
+  originalEmi: string
+  finalEmi: string
+  originalTenureMonths: number
+  originalTenureYears: string
+  originalTotalInterest: string
+  revisedTenureMonths: number
+  revisedTenureYears: string
+  tenureReductionMonths: number
+  tenureReductionYears: string
+  totalInterestNow: string
+  interestSaved: string
+  // True if the running EMI dropped below the interest accrual at some point
+  // (negative amortization) and the schedule had to be truncated. Callers
+  // surface this so the UI doesn't show a bogus "tenure reduction".
+  diverged: boolean
+  newAmortisation: EmiChangeRow[]
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string
