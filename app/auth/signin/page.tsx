@@ -36,7 +36,11 @@ function SignInContent() {
       })
 
       if (result?.error) {
-        addToast('Invalid email, password, or unverified account', 'error')
+        // Map Auth.js error codes to user-actionable messages. Logging the
+        // raw result helps diagnose intermittent issues without changing
+        // copy on every failure.
+        console.error('[signin] auth error', result)
+        addToast(messageForAuthError(result.error), 'error')
         return
       }
 
@@ -147,6 +151,27 @@ function SignInContent() {
       </div>
     </div>
   )
+}
+
+// Map an Auth.js v5 error code to a user-actionable message. The previous
+// catch-all "Invalid email, password, or unverified account" toast hid real
+// causes (e.g. browser session in a bad state from earlier Supabase-Auth
+// cookies returns CredentialsSignin even when the credentials are valid).
+function messageForAuthError(code: string): string {
+  switch (code) {
+    case 'CredentialsSignin':
+      return 'Email or password is incorrect.'
+    case 'AccessDenied':
+      return 'Account is disabled or email is not verified. Check your inbox.'
+    case 'Configuration':
+      return 'Auth is misconfigured on this server. Restart the dev server.'
+    case 'Verification':
+      return 'Verification token is invalid or expired.'
+    case 'MissingCSRF':
+      return 'Your session is stale. Clear site cookies and try again.'
+    default:
+      return `Sign-in failed (${code}). Check the browser console for details.`
+  }
 }
 
 export default function SignIn() {
