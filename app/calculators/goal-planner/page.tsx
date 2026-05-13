@@ -25,6 +25,8 @@ export default function GoalPlanner() {
 
   // Results
   const [results, setResults] = useState<GoalPlannerResult | null>(null)
+  const [narration, setNarration] = useState<string | null>(null)
+  const [narrationLoading, setNarrationLoading] = useState(false)
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -64,14 +66,58 @@ export default function GoalPlanner() {
       })
 
       setResults(result)
+      setNarration(null)
 
       // Auto-save as draft
       await saveDraft(result)
+
+      // Fire-and-fetch narration. Route returns 404 when the feature flag is
+      // off (default) — that's expected and silently skipped, no toast. Same
+      // for any other failure: narration is opt-in delight, never blocks.
+      void fetchNarration({
+        goalAmount: parseFloat(goalAmount),
+        currentAmount: parseFloat(currentAmount),
+        tenure: parseFloat(tenure),
+        tenureType,
+        inflationRate: parseFloat(inflationRate),
+        growthRate: parseFloat(growthRate),
+        annualInvestmentRate: parseFloat(annualInvestmentRate),
+      })
     } catch (error) {
       console.error('Calculation error:', error)
       addToast('Error calculating goal plan', 'error')
     } finally {
       setCalculating(false)
+    }
+  }
+
+  const fetchNarration = async (inputs: {
+    goalAmount: number
+    currentAmount: number
+    tenure: number
+    tenureType: GoalPlannerTenureType
+    inflationRate: number
+    growthRate: number
+    annualInvestmentRate: number
+  }) => {
+    setNarrationLoading(true)
+    try {
+      const response = await fetch('/api/calculators/goal-planner/narrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs }),
+      })
+      if (!response.ok) {
+        // 404 is the expected response when the feature flag is off.
+        setNarration(null)
+        return
+      }
+      const data = await response.json()
+      if (typeof data?.narration === 'string') setNarration(data.narration)
+    } catch {
+      setNarration(null)
+    } finally {
+      setNarrationLoading(false)
     }
   }
 
@@ -293,8 +339,19 @@ export default function GoalPlanner() {
               </div>
             </div>
 
+            {(narrationLoading || narration) && (
+              <div className="rounded-lg p-5 mb-6 border" style={{ borderColor: 'var(--bk-forest-100, #e5e7eb)', background: 'var(--bk-forest-25, #f8fafc)' }}>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Summary</p>
+                {narrationLoading ? (
+                  <p className="text-gray-500 text-sm italic">Reading your numbers...</p>
+                ) : (
+                  <p className="text-gray-800 leading-relaxed">{narration}</p>
+                )}
+              </div>
+            )}
+
             <div className="bg-gray-50 p-4 rounded-lg mb-6">
-              <p className="text-sm text-gray-600 mb-2">Summary</p>
+              <p className="text-sm text-gray-600 mb-2">Quick Summary</p>
               <p className="text-gray-700">
                 To accumulate ₹{parseFloat(goalAmount).toLocaleString('en-IN')} in{' '}
                 {tenure} {tenureType === 'YEAR' ? 'years' : 'months'} with {inflationRate}% inflation, you need to save{' '}
