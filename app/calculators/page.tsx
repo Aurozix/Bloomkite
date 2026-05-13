@@ -17,6 +17,7 @@ import {
   WalletIcon,
   ReceiptPercentIcon,
   ArrowsRightLeftIcon,
+  PresentationChartLineIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -125,6 +126,13 @@ const calculators: Calculator[] = [
     description: 'Impact of raising or lowering your EMI mid-loan on tenure and interest',
     icon: ArrowsRightLeftIcon,
     path: '/calculators/emi-change',
+  },
+  {
+    id: 'rate-change',
+    name: 'Rate Change Impact',
+    description: 'Compare keeping EMI vs. keeping tenure when your interest rate changes',
+    icon: PresentationChartLineIcon,
+    path: '/calculators/rate-change',
   },
 ]
 

@@ -309,6 +309,56 @@ export interface EmiChangeResult {
   newAmortisation: EmiChangeRow[]
 }
 
+// Rate Change Impact Calculator: one or more mid-loan interest-rate swaps.
+// Spec §15 defines two responses to a rate change — Approach A keeps the EMI
+// constant (tenure adjusts) and Approach B keeps the tenure constant (EMI
+// adjusts). We compute both so the UI can show side-by-side.
+export interface InterestChangeEntry {
+  interestChangedDate: string
+  changedRate: number
+}
+
+export interface RateChangeInput {
+  loanAmount: number
+  interestRate: number
+  tenure: number
+  tenureType: EMITenureType
+  loanDate?: string
+  interestChangeReq: InterestChangeEntry[]
+}
+
+// Row carries the rate and EMI in effect that month so the schedule stays
+// interpretable across mid-stream swaps.
+export interface RateChangeRow extends EMIAmortizationRow {
+  emiUsed: string
+  rateUsed: string
+}
+
+export type RateChangeApproach = 'TENURE_ADJUSTS' | 'EMI_ADJUSTS'
+
+export interface RateChangeApproachResult {
+  approach: RateChangeApproach
+  finalEmi: string
+  revisedTenureMonths: number
+  revisedTenureYears: string
+  tenureChangeMonths: number
+  tenureChangeYears: string
+  emiChange: string
+  totalInterest: string
+  interestSaved: string
+  diverged: boolean
+  newAmortisation: RateChangeRow[]
+}
+
+export interface RateChangeResult {
+  originalEmi: string
+  originalTenureMonths: number
+  originalTenureYears: string
+  originalTotalInterest: string
+  approachA: RateChangeApproachResult
+  approachB: RateChangeApproachResult
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string
