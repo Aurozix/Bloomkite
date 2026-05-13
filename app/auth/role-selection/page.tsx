@@ -21,6 +21,17 @@ export default function RoleSelection() {
   const [needsDOB, setNeedsDOB] = useState(false)
   const [dateOfBirth, setDateOfBirth] = useState('')
 
+  // BRD §8.1 — Phone OTP. Same lazy-reveal pattern: the server returns
+  // `code: 'phone_required'` if there's no verified phone on the user yet,
+  // and we expand a phone+OTP block right here on the role-selection page.
+  const [needsPhone, setNeedsPhone] = useState(false)
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [phoneSent, setPhoneSent] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
+  const [phoneCode, setPhoneCode] = useState('')
+  const [phoneBusy, setPhoneBusy] = useState(false)
+  const [debugCode, setDebugCode] = useState<string | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin')
@@ -49,6 +60,11 @@ export default function RoleSelection() {
       })
       if (!res.ok) {
         const err = await res.json()
+        if (err.code === 'phone_required') {
+          setNeedsPhone(true)
+          addToast('Please verify your phone number first', 'info')
+          return
+        }
         if (err.code === 'dob_required') {
           setNeedsDOB(true)
           addToast('Please enter your date of birth', 'info')
@@ -62,6 +78,59 @@ export default function RoleSelection() {
       router.push('/dashboard')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleSendPhoneCode = async () => {
+    if (!phoneNumber.trim()) {
+      addToast('Enter your phone number', 'error')
+      return
+    }
+    setPhoneBusy(true)
+    setDebugCode(null)
+    try {
+      const res = await fetch('/api/auth/phone-otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        addToast(data.error || 'Could not send code', 'error')
+        return
+      }
+      setPhoneSent(true)
+      setPhoneCode('')
+      if (data.phoneNumber) setPhoneNumber(data.phoneNumber)
+      if (data.debugCode) setDebugCode(data.debugCode)
+      addToast('Verification code sent', 'success')
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
+
+  const handleVerifyPhoneCode = async () => {
+    if (!/^\d{6}$/.test(phoneCode)) {
+      addToast('Enter the 6-digit code', 'error')
+      return
+    }
+    setPhoneBusy(true)
+    try {
+      const res = await fetch('/api/auth/phone-otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: phoneCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        addToast(data.error || 'Verification failed', 'error')
+        return
+      }
+      setPhoneVerified(true)
+      setDebugCode(null)
+      addToast('Phone verified', 'success')
+    } finally {
+      setPhoneBusy(false)
     }
   }
 
@@ -142,6 +211,94 @@ export default function RoleSelection() {
         </div>
 
         <div className="space-y-3">
+          {needsPhone && !phoneVerified && (
+            <div className="card p-6 mb-2 border-2" style={{ borderColor: 'var(--primary-200, #cbd5e1)' }}>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Verify your phone number
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                We need a verified mobile number before activating your profile (BRD §8.1).
+                You&apos;ll receive a 6-digit code via SMS.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Phone number (with country code)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      disabled={phoneBusy || phoneSent}
+                      placeholder="+91 98765 43210"
+                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
+                    />
+                    <button
+                      onClick={handleSendPhoneCode}
+                      disabled={phoneBusy || phoneSent}
+                      className="btn-secondary px-4 py-3 whitespace-nowrap"
+                    >
+                      {phoneSent ? 'Sent' : 'Send code'}
+                    </button>
+                  </div>
+                  {phoneSent && (
+                    <button
+                      onClick={() => {
+                        setPhoneSent(false)
+                        setPhoneCode('')
+                        setDebugCode(null)
+                      }}
+                      className="mt-1 text-xs text-blue-600 hover:underline"
+                    >
+                      Use a different number
+                    </button>
+                  )}
+                </div>
+
+                {phoneSent && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      6-digit code
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        value={phoneCode}
+                        onChange={(e) =>
+                          setPhoneCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                        }
+                        disabled={phoneBusy}
+                        placeholder="123456"
+                        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition text-center text-lg tracking-widest disabled:bg-gray-100"
+                      />
+                      <button
+                        onClick={handleVerifyPhoneCode}
+                        disabled={phoneBusy || phoneCode.length !== 6}
+                        className="btn-primary px-4 py-3 whitespace-nowrap"
+                      >
+                        Verify
+                      </button>
+                    </div>
+                    {debugCode && (
+                      <p className="mt-2 text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                        Dev mode: code is <strong>{debugCode}</strong>. Real SMS is not wired
+                        yet — see lib/sms/provider.ts.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {needsPhone && phoneVerified && (
+            <div className="rounded-lg p-3 mb-2 bg-green-50 border border-green-200 text-sm text-green-800">
+              ✓ Phone verified. Pick a role and continue.
+            </div>
+          )}
           {needsDOB && (
             <div className="card p-6 mb-2 border-2" style={{ borderColor: 'var(--primary-200, #cbd5e1)' }}>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -161,7 +318,12 @@ export default function RoleSelection() {
           )}
           <button
             onClick={handleRoleSelect}
-            disabled={!selectedRole || submitting || (needsDOB && !dateOfBirth)}
+            disabled={
+              !selectedRole ||
+              submitting ||
+              (needsDOB && !dateOfBirth) ||
+              (needsPhone && !phoneVerified)
+            }
             className="btn-primary w-full text-lg"
           >
             {submitting ? 'Setting up your account...' : 'Continue'}

@@ -31,8 +31,18 @@ export async function POST(request: NextRequest) {
   // without verifying 18+.
   const existing = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { dateOfBirth: true },
+    select: { dateOfBirth: true, phoneNumber: true, phoneVerifiedAt: true },
   })
+
+  // BRD §8.1 — phone OTP is required before any profile activates. The page
+  // is supposed to walk the user through the phone-OTP step first, but the
+  // server enforces the gate here so the API can't be bypassed.
+  if (!existing?.phoneVerifiedAt) {
+    return NextResponse.json(
+      { error: 'Verify your phone number before activating a profile', code: 'phone_required' },
+      { status: 400 },
+    )
+  }
 
   let dobDate: Date | null = existing?.dateOfBirth ?? null
 
@@ -79,11 +89,21 @@ export async function POST(request: NextRequest) {
         update: {},
       })
 
+      // Mirror the verified phone into the role-specific profile so it
+      // shows on the advisor's public surface / investor's profile page
+      // without re-querying the users table.
+      const verifiedPhone = existing.phoneNumber ?? null
+
       if (role === 'investor') {
         await tx.investorProfile.upsert({
           where: { userId: user.id },
-          create: { userId: user.id, displayName: '', dateOfBirth: dobDate },
-          update: { dateOfBirth: dobDate },
+          create: {
+            userId: user.id,
+            displayName: '',
+            dateOfBirth: dobDate,
+            phoneNumber: verifiedPhone,
+          },
+          update: { dateOfBirth: dobDate, phoneNumber: verifiedPhone },
         })
       } else {
         await tx.advisorProfile.upsert({
@@ -93,8 +113,9 @@ export async function POST(request: NextRequest) {
             displayName: '',
             workflowStatus: 'pending',
             dateOfBirth: dobDate,
+            phoneNumber: verifiedPhone,
           },
-          update: { dateOfBirth: dobDate },
+          update: { dateOfBirth: dobDate, phoneNumber: verifiedPhone },
         })
       }
     })

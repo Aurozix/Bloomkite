@@ -33,6 +33,11 @@ model User {
   // creating a profile. InvestorProfile/AdvisorProfile still carry their own
   // dateOfBirth columns as denormalised copies for historical reasons.
   dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  // BRD §8.1: Email + Phone OTP. Profile activation refuses to proceed
+  // without a verified phone. `phoneNumber` is the E.164 string captured
+  // during the OTP send (mirrored to the role's profile on success).
+  phoneNumber   String?   @map("phone_number") @db.VarChar(20)
+  phoneVerifiedAt DateTime? @map("phone_verified_at") @db.Timestamp(6)
   disabledAt    DateTime? @map("disabled_at") @db.Timestamp(6)
   disabledBy    String?   @map("disabled_by") @db.Uuid
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
@@ -121,6 +126,26 @@ model EmailVerificationOtp {
   @@index([email], map: "idx_email_otp_email")
   @@index([expiresAt], map: "idx_email_otp_expires")
   @@map("email_verification_otps")
+}
+
+/// 6-digit OTP codes for phone verification. Same hash + attempts pattern as
+/// EmailVerificationOtp; keyed by userId since phone numbers can change
+/// during onboarding (user enters wrong number → retry with a new one
+/// invalidates the prior code). The `phoneNumber` column captures which
+/// number this code was sent to, so a successful verify can write back to
+/// User.phoneNumber knowing the user typed the right number on this attempt.
+model PhoneVerificationOtp {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  phoneNumber String   @map("phone_number") @db.VarChar(20)
+  codeHash    String   @map("code_hash") @db.VarChar(64)
+  attempts    Int      @default(0)
+  expiresAt   DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([userId], map: "idx_phone_otp_user")
+  @@index([expiresAt], map: "idx_phone_otp_expires")
+  @@map("phone_verification_otps")
 }
 
 /// Password reset tokens. Stored as a SHA-256 hash; the raw token is sent
