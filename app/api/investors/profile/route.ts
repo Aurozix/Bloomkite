@@ -32,29 +32,19 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
     const { data, error } = await supabase
-      .from('advisor_profiles')
+      .from('investor_profiles')
       .select('*')
       .eq('user_id', userId)
       .single()
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching advisor profile:', error)
+      console.error('Error fetching investor profile:', error)
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
     }
 
-    const { data: expertiseRows } = await supabase
-      .from('advisor_expertise')
-      .select('specialization')
-      .eq('user_id', userId)
-
-    const expertise = (expertiseRows ?? []).map((r: any) => r.specialization)
-
-    return NextResponse.json({
-      success: true,
-      data: data ? { ...data, expertise } : null,
-    })
+    return NextResponse.json({ success: true, data: data ?? null })
   } catch (error) {
-    console.error('Advisor profile GET error:', error)
+    console.error('Investor profile GET error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -77,27 +67,26 @@ export async function PUT(request: NextRequest) {
     const {
       display_name,
       bio,
-      company_name,
-      designation,
+      phone_number,
+      date_of_birth,
+      gender,
       city,
       state,
-      website_url,
-      phone_number,
-      expertise,
+      pincode,
     } = body
 
     const supabase = createClient(supabaseUrl, supabaseKey)
     const { data, error } = await supabase
-      .from('advisor_profiles')
+      .from('investor_profiles')
       .update({
         display_name: display_name || null,
         bio: bio || null,
-        company_name: company_name || null,
-        designation: designation || null,
+        phone_number: phone_number || null,
+        date_of_birth: date_of_birth || null,
+        gender: gender || null,
         city: city || null,
         state: state || null,
-        website_url: website_url || null,
-        phone_number: phone_number || null,
+        pincode: pincode || null,
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', userId)
@@ -105,36 +94,8 @@ export async function PUT(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error('Error updating advisor profile:', error)
+      console.error('Error updating investor profile:', error)
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
-    }
-
-    // Optionally sync expertise tags. Pass `expertise: string[]` to replace
-    // the advisor's full tag set; omit the field to leave it untouched.
-    if (Array.isArray(expertise)) {
-      const cleaned = expertise
-        .map((s: unknown) => (typeof s === 'string' ? s.trim() : ''))
-        .filter((s) => s.length > 0)
-
-      const { error: delError } = await supabase
-        .from('advisor_expertise')
-        .delete()
-        .eq('user_id', userId)
-
-      if (delError) {
-        console.error('Error clearing expertise:', delError)
-      } else if (cleaned.length > 0) {
-        const rows = cleaned.map((specialization) => ({
-          user_id: userId,
-          specialization,
-        }))
-        const { error: insError } = await supabase
-          .from('advisor_expertise')
-          .insert(rows)
-        if (insError) {
-          console.error('Error inserting expertise:', insError)
-        }
-      }
     }
 
     return NextResponse.json({
@@ -143,7 +104,7 @@ export async function PUT(request: NextRequest) {
       data,
     })
   } catch (error) {
-    console.error('Advisor profile PUT error:', error)
+    console.error('Investor profile PUT error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

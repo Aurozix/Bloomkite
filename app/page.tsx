@@ -6,31 +6,9 @@ import {
   ArrowsRightLeftIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline'
-import { ColorSchemeSelector } from './components/color-scheme-selector'
-
 export default function Home() {
   return (
     <div className="w-full">
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 backdrop-blur-sm bg-white/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <img src="/Bloomkite.png" alt="Bloomkite" className="h-10 w-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Bloomkite
-            </span>
-          </div>
-          <div className="flex items-center gap-6">
-            <div style={{ display: 'none' }}>
-              <ColorSchemeSelector />
-            </div>
-            <a href="/auth/signin" className="btn-primary text-sm">
-              Sign In
-            </a>
-          </div>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
         {/* Gradient Background */}

@@ -43,9 +43,12 @@ export async function GET(request: NextRequest) {
       query = query.eq('city', city)
     }
 
-    // Apply sorting
+    // Apply sorting. Both branches use a deterministic created_at tiebreaker
+    // so equal counts produce a stable order across pages.
     if (sort === 'followers') {
-      query = query.order('created_at', { ascending: false })
+      query = query
+        .order('follower_count', { ascending: false })
+        .order('created_at', { ascending: false })
     } else {
       query = query.order('created_at', { ascending: false })
     }
@@ -71,11 +74,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Format advisors with follower counts
+    // Format advisors. follower_count is now denormalized on advisor_profiles
+    // (kept in sync by a trigger); the advisor_followers aggregate is kept as
+    // a fallback in case the trigger hasn't backfilled an older row.
     const formattedAdvisors = filtered.map((advisor: any) => ({
       ...advisor,
       follower_count:
-        advisor.advisor_followers?.[0]?.count || 0,
+        advisor.follower_count ?? advisor.advisor_followers?.[0]?.count ?? 0,
       expertise:
         advisor.advisor_expertise?.map((e: any) => e.specialization) || [],
     }))

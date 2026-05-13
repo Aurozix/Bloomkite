@@ -4,6 +4,7 @@ import './globals.css'
 import { ToastProvider } from './components/toast-context'
 import { ToastContainer } from './components/toast-container'
 import { ColorSchemeProvider } from './components/color-scheme-context'
+import { Navbar } from './components/Navbar'
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -29,6 +30,7 @@ export default function RootLayout({
         <ColorSchemeProvider>
           <ToastProvider>
             <div className="min-h-screen flex flex-col">
+              <Navbar />
               <main className="flex-1">
                 {children}
               </main>

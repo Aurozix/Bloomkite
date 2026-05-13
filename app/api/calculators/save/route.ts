@@ -67,6 +67,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Mirror Risk Profiler's final category back to the investor profile so
+    // it can be displayed on /profile/investor and used as defaults elsewhere
+    // (e.g., calculator pre-fill). Only on explicit save (not auto-save draft).
+    if (
+      body.calculator_type === 'risk-profiler' &&
+      body.is_draft === false &&
+      typeof (body.results as { riskCategory?: unknown }).riskCategory === 'string'
+    ) {
+      const riskCategory = (body.results as { riskCategory: string }).riskCategory
+      const { error: profileError } = await supabase
+        .from('investor_profiles')
+        .update({
+          risk_profile: riskCategory,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+
+      if (profileError) {
+        // Don't fail the whole request — the plan is saved; profile mirroring
+        // is best-effort. Log so we notice if it stops working.
+        console.error('Failed to sync risk_profile to investor_profile:', profileError)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: `Calculator result saved as ${body.is_draft ? 'draft' : 'final'}`,

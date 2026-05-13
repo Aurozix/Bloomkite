@@ -1,24 +1,14 @@
 import { PUT } from '@/app/api/advisors/profile/route'
 import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+import { applySupabaseMock } from '../../../helpers/supabase-mock'
 
 jest.mock('next/headers', () => ({
   cookies: jest.fn(),
 }))
 
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn((table) => ({
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({
-        data: { id: 'advisor-1', display_name: 'John Advisor', bio: 'Financial Expert' },
-        error: null,
-      }),
-    })),
-  })),
-}))
+jest.mock('@supabase/supabase-js')
 
 describe('Advisor Profile Route', () => {
   const mockToken =
@@ -26,31 +16,35 @@ describe('Advisor Profile Route', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    applySupabaseMock(createClient as jest.Mock, {
+      user: { id: 'advisor-123', email: 'advisor@example.com' },
+      tableResults: {
+        advisor_profiles: {
+          data: {
+            id: 'advisor-1',
+            display_name: 'John Advisor',
+            bio: 'Financial Expert',
+          },
+        },
+      },
+    })
   })
 
   describe('PUT /api/advisors/profile', () => {
     it('should return 401 when no access token', async () => {
-      const mockCookies = {
-        get: jest.fn().mockReturnValue(undefined),
-      }
+      const mockCookies = { get: jest.fn().mockReturnValue(undefined) }
       ;(cookies as jest.Mock).mockResolvedValue(mockCookies)
 
       const request = new NextRequest('http://localhost:3000/api/advisors/profile', {
         method: 'PUT',
-        body: JSON.stringify({
-          display_name: 'Updated Name',
-          bio: 'Updated bio',
-        }),
+        body: JSON.stringify({ display_name: 'Updated Name', bio: 'Updated bio' }),
       })
-
       const response = await PUT(request)
       expect(response.status).toBe(401)
     })
 
     it('should update profile with valid data', async () => {
-      const mockCookies = {
-        get: jest.fn().mockReturnValue({ value: mockToken }),
-      }
+      const mockCookies = { get: jest.fn().mockReturnValue({ value: mockToken }) }
       ;(cookies as jest.Mock).mockResolvedValue(mockCookies)
 
       const request = new NextRequest('http://localhost:3000/api/advisors/profile', {
@@ -64,7 +58,6 @@ describe('Advisor Profile Route', () => {
           state: 'Karnataka',
         }),
       })
-
       const response = await PUT(request)
       expect(response.status).toBe(200)
       const data = await response.json()
@@ -72,9 +65,7 @@ describe('Advisor Profile Route', () => {
     })
 
     it('should accept optional fields', async () => {
-      const mockCookies = {
-        get: jest.fn().mockReturnValue({ value: mockToken }),
-      }
+      const mockCookies = { get: jest.fn().mockReturnValue({ value: mockToken }) }
       ;(cookies as jest.Mock).mockResolvedValue(mockCookies)
 
       const request = new NextRequest('http://localhost:3000/api/advisors/profile', {
@@ -85,22 +76,18 @@ describe('Advisor Profile Route', () => {
           phone_number: '+91-9876543210',
         }),
       })
-
       const response = await PUT(request)
       expect(response.status).toBe(200)
     })
 
     it('should handle errors gracefully', async () => {
-      const mockCookies = {
-        get: jest.fn().mockReturnValue({ value: mockToken }),
-      }
+      const mockCookies = { get: jest.fn().mockReturnValue({ value: mockToken }) }
       ;(cookies as jest.Mock).mockResolvedValue(mockCookies)
 
       const request = new NextRequest('http://localhost:3000/api/advisors/profile', {
         method: 'PUT',
         body: JSON.stringify({}),
       })
-
       const response = await PUT(request)
       expect([200, 400, 500]).toContain(response.status)
     })
