@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { calculateRequiredTenure } from '@/lib/calculators/tenureFinder'
 import { TenureFinderResult } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
+import { PaywallGate } from '@/app/components/PaywallGate'
 
 export default function TenureFinderPage() {
   const router = useRouter()
@@ -94,6 +95,10 @@ export default function TenureFinderPage() {
           How long will it take to reach your target at the given rate?
         </p>
 
+        <PaywallGate
+          requires="silver"
+          reason="Tenure Finder is part of the advanced calculator suite. Upgrade to Silver to unlock all 15 calculators."
+        >
         <div className="card p-8 mb-8 grid md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -147,6 +152,7 @@ export default function TenureFinderPage() {
             </button>
           </div>
         )}
+        </PaywallGate>
       </div>
     </div>
   )

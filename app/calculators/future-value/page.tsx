@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { calculateFutureValue } from '@/lib/calculators/futureValue'
 import { FutureValueResult } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
+import { PaywallGate } from '@/app/components/PaywallGate'
 
 export default function FutureValuePage() {
   const router = useRouter()
@@ -94,6 +95,10 @@ export default function FutureValuePage() {
           Project how much an investment will grow at a fixed annual rate.
         </p>
 
+        <PaywallGate
+          requires="silver"
+          reason="Future Value is part of the advanced calculator suite. Upgrade to Silver to unlock all 15 calculators."
+        >
         <div className="card p-8 mb-8 grid md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -149,6 +154,7 @@ export default function FutureValuePage() {
             </button>
           </div>
         )}
+        </PaywallGate>
       </div>
     </div>
   )

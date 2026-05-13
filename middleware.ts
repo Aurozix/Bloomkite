@@ -6,7 +6,9 @@ const PUBLIC_EXACT = new Set<string>([
   '/advisors',
   '/articles',
   '/forum',
+  '/subscriptions',
   '/api/advisors/search',
+  '/api/subscriptions/plans',
 ])
 
 // Public prefixes (request path must start with one of these)
@@ -16,6 +18,7 @@ const PUBLIC_PREFIXES = [
   '/articles/',
   '/forum/',
   '/api/auth/',
+  '/api/webhooks/',
 ]
 
 function isPublic(pathname: string): boolean {
