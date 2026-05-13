@@ -172,6 +172,39 @@ export interface TenureFinderResult {
   requiredMonths: string
 }
 
+// EMI Calculator: monthly EMI + amortization schedule for a fixed-rate loan
+export type EMITenureType = 'MONTH' | 'YEAR'
+
+export interface EMICalculatorInput {
+  loanAmount: number
+  tenure: number
+  tenureType: EMITenureType
+  interestRate: number
+  // Loan start date in MMM-yyyy format (per spec §11.2). Optional; defaults to current month.
+  startDate?: string
+}
+
+export interface EMIAmortizationRow {
+  monthNumber: number
+  date: string
+  openingBalance: string
+  interest: string
+  principal: string
+  closingBalance: string
+  loanPaid: string
+  totalPaid: string
+}
+
+export interface EMICalculatorResult {
+  emi: string
+  interestPayable: string
+  total: string
+  loanAmount: string
+  tenure: number
+  rate: string
+  amortisationResponse: EMIAmortizationRow[]
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string

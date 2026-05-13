@@ -1,0 +1,149 @@
+import Decimal from 'decimal.js'
+import {
+  EMIAmortizationRow,
+  EMICalculatorInput,
+  EMICalculatorResult,
+} from './types'
+
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
+
+// Parse a "MMM-yyyy" string (e.g. "Jan-2026") into a [year, monthIndex] tuple.
+// Returns null on any parse failure; the caller falls back to "today".
+function parseStartDate(input?: string): { year: number; monthIndex: number } | null {
+  if (!input) return null
+  const m = input.trim().match(/^([A-Za-z]{3})-(\d{4})$/)
+  if (!m) return null
+  const monthIndex = MONTH_NAMES.findIndex(
+    (name) => name.toLowerCase() === m[1].toLowerCase(),
+  )
+  if (monthIndex < 0) return null
+  const year = parseInt(m[2], 10)
+  if (!Number.isFinite(year)) return null
+  return { year, monthIndex }
+}
+
+function formatMonthYear(year: number, monthIndex: number): string {
+  return `${MONTH_NAMES[monthIndex]}-${year}`
+}
+
+// EMI = P × [r × (1+r)^n] / [(1+r)^n − 1]
+// where r is the monthly rate (annual/12/100) and n is months.
+// Generates a full amortization schedule per spec §11.4.
+export function calculateEmi(input: EMICalculatorInput): EMICalculatorResult {
+  Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP })
+
+  const principal = new Decimal(input.loanAmount)
+  const annualRate = new Decimal(input.interestRate)
+  const monthlyRate = annualRate.dividedBy(100).dividedBy(12)
+
+  const nMonths =
+    input.tenureType === 'YEAR'
+      ? Math.round(input.tenure * 12)
+      : Math.round(input.tenure)
+
+  // Guard against zero-month or zero-principal inputs to avoid divide-by-zero.
+  if (nMonths <= 0 || principal.lessThanOrEqualTo(0)) {
+    return {
+      emi: new Decimal(0).toFixed(2),
+      interestPayable: new Decimal(0).toFixed(2),
+      total: principal.toFixed(2),
+      loanAmount: principal.toFixed(2),
+      tenure: nMonths,
+      rate: annualRate.toFixed(2),
+      amortisationResponse: [],
+    }
+  }
+
+  // Zero-interest loan: EMI is simply principal / nMonths. The geometric
+  // formula divides by zero, so handle it explicitly.
+  let emi: Decimal
+  if (monthlyRate.isZero()) {
+    emi = principal.dividedBy(nMonths)
+  } else {
+    const onePlusR = new Decimal(1).plus(monthlyRate)
+    const pow = onePlusR.pow(nMonths)
+    emi = principal
+      .times(monthlyRate)
+      .times(pow)
+      .dividedBy(pow.minus(1))
+  }
+
+  // Build amortization schedule. The last row's closing balance is forced to
+  // zero so floating-point drift over hundreds of months doesn't leave a
+  // residual rupee balance.
+  const start = parseStartDate(input.startDate) ?? (() => {
+    const now = new Date()
+    return { year: now.getFullYear(), monthIndex: now.getMonth() }
+  })()
+
+  const schedule: EMIAmortizationRow[] = []
+  let opening = principal
+  let cumulativePaid = new Decimal(0)
+
+  for (let i = 0; i < nMonths; i++) {
+    const interest = opening.times(monthlyRate)
+    let principalPortion = emi.minus(interest)
+    let closing = opening.minus(principalPortion)
+
+    // Final payment: absorb any rounding residue into the last principal
+    // so the schedule terminates at exactly zero.
+    if (i === nMonths - 1) {
+      principalPortion = opening
+      closing = new Decimal(0)
+    }
+
+    cumulativePaid = cumulativePaid.plus(interest).plus(principalPortion)
+
+    const loanPaidPct = principal.isZero()
+      ? new Decimal(0)
+      : principal.minus(closing).dividedBy(principal).times(100)
+
+    const monthIndex = (start.monthIndex + i) % 12
+    const year = start.year + Math.floor((start.monthIndex + i) / 12)
+
+    schedule.push({
+      monthNumber: i + 1,
+      date: formatMonthYear(year, monthIndex),
+      openingBalance: opening.toFixed(2),
+      interest: interest.toFixed(2),
+      principal: principalPortion.toFixed(2),
+      closingBalance: closing.toFixed(2),
+      loanPaid: loanPaidPct.toFixed(2),
+      totalPaid: cumulativePaid.toFixed(2),
+    })
+
+    opening = closing
+  }
+
+  // Total interest = sum of interest column; total payable = principal + interest.
+  // Using the column sum (not EMI × n) keeps the figure consistent with the
+  // schedule after the final-row rounding adjustment.
+  const totalInterest = schedule.reduce(
+    (sum, row) => sum.plus(row.interest),
+    new Decimal(0),
+  )
+  const totalPayable = principal.plus(totalInterest)
+
+  return {
+    emi: emi.toFixed(2),
+    interestPayable: totalInterest.toFixed(2),
+    total: totalPayable.toFixed(2),
+    loanAmount: principal.toFixed(2),
+    tenure: nMonths,
+    rate: annualRate.toFixed(2),
+    amortisationResponse: schedule,
+  }
+}

@@ -13,6 +13,7 @@ import {
   ClockIcon,
   AdjustmentsHorizontalIcon,
   ScaleIcon,
+  HomeModernIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -93,6 +94,13 @@ const calculators: Calculator[] = [
     description: 'How long will it take to reach your target at the given rate?',
     icon: ClockIcon,
     path: '/calculators/tenure-finder',
+  },
+  {
+    id: 'emi',
+    name: 'EMI Calculator',
+    description: 'Calculate monthly loan EMI with a full amortization schedule',
+    icon: HomeModernIcon,
+    path: '/calculators/emi',
   },
 ]
 
