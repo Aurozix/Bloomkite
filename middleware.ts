@@ -8,10 +8,15 @@ const PUBLIC_EXACT = new Set<string>([
   '/forum',
   '/subscriptions',
   '/api/advisors/search',
+  '/api/articles',
+  '/api/forum/questions',
   '/api/subscriptions/plans',
 ])
 
-// Public prefixes (request path must start with one of these)
+// Public prefixes (request path must start with one of these).
+// The API prefixes below cover GET listings + detail reads. Mutation methods
+// inside these routes (POST/PUT/DELETE) self-gate via cookie checks, so
+// opening the prefix at the middleware layer is safe.
 const PUBLIC_PREFIXES = [
   '/auth/',
   '/advisors/',
@@ -19,6 +24,9 @@ const PUBLIC_PREFIXES = [
   '/forum/',
   '/api/auth/',
   '/api/webhooks/',
+  '/api/articles/',
+  '/api/forum/',
+  '/api/advisors/',
 ]
 
 function isPublic(pathname: string): boolean {

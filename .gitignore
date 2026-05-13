@@ -45,3 +45,10 @@ coverage/
 # Temporary files
 tmp/
 temp/
+_tmp_*
+
+# Supabase CLI local state (only supabase/config.toml is committed)
+supabase/.branches/
+supabase/.temp/
+supabase/snippets/
+supabase/seed.sql

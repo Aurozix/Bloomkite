@@ -1,4 +1,10 @@
-# Local Postgres for Bloomkite development.
+# Local Postgres for Bloomkite development — FALLBACK PATH.
+#
+# The official local dev path is the Supabase CLI:
+#   supabase start  (brings up Postgres + GoTrue + PostgREST + Studio)
+#   supabase stop
+# Use the CLI unless you need a Postgres-only environment without the full
+# Supabase stack (e.g., schema-only experimentation in CI).
 #
 # Uses supabase/postgres so the `auth` schema, `auth.users` table, and
 # auth.uid() / auth.role() functions referenced by our migrations are present

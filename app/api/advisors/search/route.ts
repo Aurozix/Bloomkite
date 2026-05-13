@@ -17,34 +17,32 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-    // Build base query
+    // Base query against advisor_profiles. PostgREST can't traverse the
+    // implicit advisor_profiles -> users <- advisor_followers chain (both
+    // advisor_followers.advisor_id and advisor_expertise.user_id reference
+    // users.id, not advisor_profiles.user_id), so we fetch profiles here and
+    // load expertise in a second batched query below.
+    //
+    // follower_count comes from the denormalized column on advisor_profiles
+    // maintained by the trigger in migration 005.
     let query = supabase
       .from('advisor_profiles')
-      .select(
-        `
-        *,
-        advisor_followers:advisor_followers(count),
-        advisor_expertise(specialization)
-      `,
-        { count: 'exact' }
-      )
+      .select('*', { count: 'exact' })
       .eq('is_verified', true)
       .eq('workflow_status', 'approved')
 
-    // Apply text search
     if (q) {
       query = query.or(
         `display_name.ilike.%${q}%,company_name.ilike.%${q}%,bio.ilike.%${q}%`
       )
     }
 
-    // Apply city filter
     if (city) {
       query = query.eq('city', city)
     }
 
-    // Apply sorting. Both branches use a deterministic created_at tiebreaker
-    // so equal counts produce a stable order across pages.
+    // Both sort branches use a deterministic created_at tiebreaker so equal
+    // counts produce a stable order across pages.
     if (sort === 'followers') {
       query = query
         .order('follower_count', { ascending: false })
@@ -53,7 +51,6 @@ export async function GET(request: NextRequest) {
       query = query.order('created_at', { ascending: false })
     }
 
-    // Apply pagination
     query = query.range(offset, offset + limit - 1)
 
     const { data: advisors, error, count } = await query
@@ -63,26 +60,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to search advisors' }, { status: 500 })
     }
 
-    // Post-process to filter by specialization and format response
-    let filtered = advisors || []
+    const advisorList = advisors ?? []
 
-    if (specialization) {
-      filtered = filtered.filter((advisor: any) =>
-        advisor.advisor_expertise?.some((exp: any) =>
-          exp.specialization?.toLowerCase().includes(specialization)
-        )
-      )
+    // Batch-fetch expertise rows for the visible advisors so the page can
+    // render their specialisation tags. One query per request, regardless of
+    // result-set size.
+    const userIds = advisorList.map((a: any) => a.user_id).filter(Boolean)
+    const expertiseByUser = new Map<string, string[]>()
+    if (userIds.length > 0) {
+      const { data: expertiseRows } = await supabase
+        .from('advisor_expertise')
+        .select('user_id, specialization')
+        .in('user_id', userIds)
+      for (const row of expertiseRows ?? []) {
+        const arr = expertiseByUser.get((row as any).user_id) ?? []
+        arr.push((row as any).specialization)
+        expertiseByUser.set((row as any).user_id, arr)
+      }
     }
 
-    // Format advisors. follower_count is now denormalized on advisor_profiles
-    // (kept in sync by a trigger); the advisor_followers aggregate is kept as
-    // a fallback in case the trigger hasn't backfilled an older row.
+    // Specialization filter is post-fetch (the embedded query was the same).
+    // Acceptable at MVP volumes; revisit if advisor count gets large.
+    let filtered = advisorList
+    if (specialization) {
+      filtered = filtered.filter((advisor: any) => {
+        const tags = expertiseByUser.get(advisor.user_id) ?? []
+        return tags.some((t) => t.toLowerCase().includes(specialization))
+      })
+    }
+
     const formattedAdvisors = filtered.map((advisor: any) => ({
       ...advisor,
-      follower_count:
-        advisor.follower_count ?? advisor.advisor_followers?.[0]?.count ?? 0,
-      expertise:
-        advisor.advisor_expertise?.map((e: any) => e.specialization) || [],
+      follower_count: advisor.follower_count ?? 0,
+      expertise: expertiseByUser.get(advisor.user_id) ?? [],
     }))
 
     return NextResponse.json({
