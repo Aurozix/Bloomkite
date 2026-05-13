@@ -46,7 +46,7 @@ export default function SignUp() {
         return
       }
 
-      router.push('/auth/check-email?email=' + encodeURIComponent(email))
+      router.push('/auth/verify-email?email=' + encodeURIComponent(email))
     } catch {
       addToast('An unexpected error occurred', 'error')
     } finally {

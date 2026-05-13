@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
-import { sendVerificationEmail } from '@/lib/email'
+import { sendVerificationOtpEmail } from '@/lib/email'
 import { isAtLeast18, parseISODate } from '@/lib/auth/age'
 
 // dateOfBirth is OPTIONAL at signup (BRD §3.1 / §8.1 — user chose
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    await sendVerificationEmail(user.email)
+    await sendVerificationOtpEmail(user.email)
 
     return NextResponse.json({ success: true })
   } catch (error) {

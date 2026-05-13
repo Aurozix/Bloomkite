@@ -100,6 +100,29 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+/// 6-digit OTP codes for email verification at signup.
+///
+/// Separate from VerificationToken (which Auth.js owns and constrains
+/// token-uniqueness on, an awkward fit for a 6-digit value with only a
+/// million possibilities). codeHash stores SHA-256 of the raw code so DB
+/// compromise doesn't leak in-flight OTPs. `attempts` rate-limits brute
+/// force; the route invalidates the row after 5 wrong tries.
+///
+/// Each new send for a given email deletes prior rows for that email — we
+/// never want two valid codes outstanding at the same time.
+model EmailVerificationOtp {
+  id        String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  email     String   @db.VarChar(255)
+  codeHash  String   @map("code_hash") @db.VarChar(64)
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([email], map: "idx_email_otp_email")
+  @@index([expiresAt], map: "idx_email_otp_expires")
+  @@map("email_verification_otps")
+}
+
 /// Password reset tokens. Stored as a SHA-256 hash; the raw token is sent
 /// in the reset link and never persisted. expiresAt is 1h from creation.
 /// usedAt is set on first use to prevent token replay.
