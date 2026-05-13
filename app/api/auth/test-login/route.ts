@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         apikey: supabaseKey,
-      },
+      } as HeadersInit,
       body: JSON.stringify({
         token_hash: token,
         type: "magiclink",

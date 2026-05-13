@@ -210,6 +210,7 @@ export default function RiskProfiler() {
   const visibleQuestions = questions.filter((q) => {
     if (!q.conditional) return true
     const conditionQNum = q.conditionCheckFor
+    if (conditionQNum === undefined) return false
     const conditionAnswer = answers.get(conditionQNum)
     if (conditionAnswer === undefined) return false
     // For Q3, if answer is 0 (Yes), show Q3A. If answer is 1 (No), skip Q3A

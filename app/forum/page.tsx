@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ForumQuestionCard } from '@/app/components/ForumQuestionCard'
@@ -20,7 +20,7 @@ interface Question {
   }
 }
 
-export default function Forum() {
+function ForumContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { addToast } = useToast()
@@ -170,5 +170,19 @@ export default function Forum() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function Forum() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin h-12 w-12 border-4 border-gray-300 border-t-blue-500 rounded-full"></div>
+        </div>
+      }
+    >
+      <ForumContent />
+    </Suspense>
   )
 }

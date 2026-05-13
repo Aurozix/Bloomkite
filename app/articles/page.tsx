@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { ArticleCard } from '@/app/components/ArticleCard'
@@ -23,7 +23,7 @@ interface Article {
 
 const CATEGORIES = ['All', 'Investment', 'Tax', 'Retirement', 'Insurance', 'Budgeting']
 
-export default function Articles() {
+function ArticlesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { addToast } = useToast()
@@ -166,5 +166,19 @@ export default function Articles() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function Articles() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin h-12 w-12 border-4 border-gray-300 border-t-blue-500 rounded-full"></div>
+        </div>
+      }
+    >
+      <ArticlesContent />
+    </Suspense>
   )
 }
