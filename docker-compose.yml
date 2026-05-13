@@ -1,0 +1,38 @@
+# Local Postgres for Bloomkite development.
+#
+# Uses supabase/postgres so the `auth` schema, `auth.users` table, and
+# auth.uid() / auth.role() functions referenced by our migrations are present
+# without us having to maintain stubs. The hosted Supabase project is still
+# used for actual auth (sign-in, JWT issuance) — this container provides only
+# the database.
+#
+# Usage:
+#   docker compose up -d           # start
+#   docker compose down            # stop, keep data
+#   docker compose down -v         # stop, wipe data volume
+#   npm run db:migrate             # apply migrations to this DB
+#
+# Port 54322 is the same one the Supabase CLI uses by default; this avoids
+# colliding with any system Postgres on 5432.
+
+services:
+  postgres:
+    image: supabase/postgres:15.1.0.117
+    container_name: bloomkite-postgres
+    restart: unless-stopped
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - bloomkite-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bloomkite-pgdata:

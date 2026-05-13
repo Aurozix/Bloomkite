@@ -29,26 +29,45 @@ if (!fs.existsSync(envPath)) {
 dotenv.config({ path: envPath });
 console.log(`🌱 Loaded env from ${envFile} (env=${envArg})`);
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// Connection target resolution:
+//   - If SUPABASE_DB_HOST is set, use it directly (this is the local docker path).
+//   - Otherwise derive the host from NEXT_PUBLIC_SUPABASE_URL (hosted Supabase).
+// SUPABASE_DB_PORT defaults to 5432.
+// SUPABASE_DB_SSL defaults to "require" (set to "disable" for local docker).
+const explicitHost = process.env.SUPABASE_DB_HOST;
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+const dbPortStr = process.env.SUPABASE_DB_PORT || "5432";
+const dbPort = parseInt(dbPortStr, 10);
+const dbSslMode = (process.env.SUPABASE_DB_SSL || "require").toLowerCase();
+const dbUser = process.env.SUPABASE_DB_USER || "postgres";
+const dbName = process.env.SUPABASE_DB_NAME || "postgres";
 
-if (!supabaseUrl || !dbPassword) {
-  console.error(
-    "❌ Missing environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_DB_PASSWORD"
-  );
+if (!dbPassword) {
+  console.error("❌ Missing environment variable: SUPABASE_DB_PASSWORD");
   process.exit(1);
 }
 
-const url = new URL(supabaseUrl);
-const host = url.hostname;
+let host: string;
+if (explicitHost) {
+  host = explicitHost;
+} else {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    console.error(
+      "❌ Either SUPABASE_DB_HOST or NEXT_PUBLIC_SUPABASE_URL must be set"
+    );
+    process.exit(1);
+  }
+  host = new URL(supabaseUrl).hostname;
+}
 
 const client = new Client({
   host,
-  port: 5432,
-  database: "postgres",
-  user: "postgres",
+  port: dbPort,
+  database: dbName,
+  user: dbUser,
   password: dbPassword,
-  ssl: "require",
+  ssl: dbSslMode === "disable" ? false : "require",
 } as any);
 
 async function ensureMigrationsTable() {
@@ -72,7 +91,7 @@ async function recordMigration(name: string) {
 
 async function migrate() {
   try {
-    console.log(`🔌 Attempting to connect to ${host}:5432...`);
+    console.log(`🔌 Attempting to connect to ${host}:${dbPort} (ssl=${dbSslMode})...`);
     await client.connect();
     console.log("✅ Connected to database");
 
