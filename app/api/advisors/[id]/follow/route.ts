@@ -5,9 +5,9 @@ import { cookies } from 'next/headers'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const cookieStore = await cookies()
     const accessToken = cookieStore.get('sb-access-token')?.value
@@ -65,6 +65,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+const supabase = createClient(supabaseUrl, supabaseKey)
+
   try {
     const cookieStore = await cookies()
     const accessToken = cookieStore.get('sb-access-token')?.value

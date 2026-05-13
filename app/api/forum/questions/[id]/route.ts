@@ -4,9 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey)
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const questionId = params.id
 

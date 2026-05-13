@@ -5,9 +5,9 @@ import { cookies } from 'next/headers'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
+export async function GET(request: NextRequest) {
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const accessToken = cookieStore.get('sb-access-token')?.value

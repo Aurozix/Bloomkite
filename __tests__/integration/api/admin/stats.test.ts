@@ -1,25 +1,14 @@
 import { GET } from '@/app/api/admin/stats/route'
 import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+import { applySupabaseMock } from '../../../helpers/supabase-mock'
 
 jest.mock('next/headers', () => ({
   cookies: jest.fn(),
 }))
 
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn((table) => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      head: jest.fn().mockReturnThis(),
-      count: jest.fn().mockResolvedValue({
-        count: 100,
-        data: null,
-        error: null,
-      }),
-    })),
-  })),
-}))
+jest.mock('@supabase/supabase-js')
 
 describe('Admin Stats Route', () => {
   const mockAdminToken =
@@ -27,6 +16,15 @@ describe('Admin Stats Route', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    applySupabaseMock(createClient as jest.Mock, {
+      tableResults: {
+        user_roles: { data: [{ role: { name: 'admin' } }] },
+        users: { count: 100, data: null },
+        advisor_profiles: { count: 50, data: null },
+        advisor_credentials: { count: 5, data: null },
+        articles: { count: 2, data: null },
+      },
+    })
   })
 
   describe('GET /api/admin/stats', () => {
@@ -129,6 +127,13 @@ describe('Admin Stats Route', () => {
       const nonAdminToken =
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyJ9.signature'
 
+      // Override user_roles to be non-admin for this test
+      applySupabaseMock(createClient as jest.Mock, {
+        tableResults: {
+          user_roles: { data: [{ role: { name: 'investor' } }] },
+        },
+      })
+
       const mockCookies = {
         get: jest.fn().mockReturnValue({ value: nonAdminToken }),
       }
@@ -139,7 +144,7 @@ describe('Admin Stats Route', () => {
       })
 
       const response = await GET(request)
-      expect([200, 403]).toContain(response.status)
+      expect(response.status).toBe(403)
     })
 
     it('should return JSON response', async () => {
@@ -157,6 +162,16 @@ describe('Admin Stats Route', () => {
     })
 
     it('should return 0 for counts when no data', async () => {
+      applySupabaseMock(createClient as jest.Mock, {
+        tableResults: {
+          user_roles: { data: [{ role: { name: 'admin' } }] },
+          users: { count: 0, data: null },
+          advisor_profiles: { count: 0, data: null },
+          advisor_credentials: { count: 0, data: null },
+          articles: { count: 0, data: null },
+        },
+      })
+
       const mockCookies = {
         get: jest.fn().mockReturnValue({ value: mockAdminToken }),
       }

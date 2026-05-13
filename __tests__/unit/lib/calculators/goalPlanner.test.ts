@@ -171,8 +171,13 @@ describe('calculateGoalPlan', () => {
         investmentRate: 9.33,
       })
 
-      const monthly = parseFloat(result.requiredMonthlyInvestment)
-      expect(monthly % 0.01).toBeLessThan(0.001)
+      // String-based precision check — float modulo on currency values
+      // produces 0.00999... artifacts that flap. The calculator returns a
+      // Decimal-formatted string, so verify directly that it has at most 2
+      // decimal places.
+      const formatted = result.requiredMonthlyInvestment
+      const decimals = formatted.split('.')[1] ?? ''
+      expect(decimals.length).toBeLessThanOrEqual(2)
     })
 
     it('should handle currency precision correctly', () => {

@@ -6,10 +6,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-const supabase = createClient(supabaseUrl, supabaseKey)
-const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey)
-
 export async function GET(request: NextRequest) {
+const supabase = createClient(supabaseUrl, supabaseKey)
+  const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey)
+
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('q') || ''
@@ -52,6 +52,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+const supabase = createClient(supabaseUrl, supabaseKey)
+  const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey)
+
   try {
     const cookieStore = await cookies()
     const accessToken = cookieStore.get('sb-access-token')?.value
