@@ -12,6 +12,9 @@ export default function SignUp() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // BRD §8.1 — Adults Only. DOB is optional at signup (the activation step
+  // requires it), but if entered here it must pass the 18+ gate server-side.
+  const [dateOfBirth, setDateOfBirth] = useState('')
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -28,7 +31,12 @@ export default function SignUp() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          ...(dateOfBirth ? { dateOfBirth } : {}),
+        }),
       })
 
       const data = await res.json()
@@ -84,6 +92,22 @@ export default function SignUp() {
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
             />
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Date of birth (optional — required to activate your profile)
+              </label>
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                disabled={loading}
+                max={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition disabled:bg-gray-100"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Bloomkite is for adults only — 18 years or older.
+              </p>
+            </div>
             <button
               onClick={handleSubmit}
               disabled={loading}

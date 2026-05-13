@@ -28,6 +28,11 @@ model User {
   image         String?   @map("avatar_url")
   emailVerified DateTime? @map("email_verified") @db.Timestamp(6)
   passwordHash  String?   @map("password_hash") @db.VarChar(255)
+  // BRD §8.1: Adults Only — platform requires 18+. Nullable so existing rows
+  // (pre-DOB-rollout) keep working; activation paths require it before
+  // creating a profile. InvestorProfile/AdvisorProfile still carry their own
+  // dateOfBirth columns as denormalised copies for historical reasons.
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
   disabledAt    DateTime? @map("disabled_at") @db.Timestamp(6)
   disabledBy    String?   @map("disabled_by") @db.Uuid
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
