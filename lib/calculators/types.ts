@@ -1,21 +1,32 @@
 import Decimal from 'decimal.js'
 
 // Goal Planner
+// Output field names mirror Calculators_Requirements.md §1.4 directly.
+export type GoalPlannerTenureType = 'MONTH' | 'YEAR'
+
 export interface GoalPlannerInput {
   goalAmount: number
-  currentSavings: number
-  tenureYears: number
+  currentAmount: number
+  tenure: number
+  tenureType: GoalPlannerTenureType
   inflationRate: number
   growthRate: number
-  investmentRate: number
+  annualInvestmentRate: number
 }
 
 export interface GoalPlannerResult {
+  // Inflation-adjusted goal amount at the end of the tenure.
+  futureCost: string
+  // Current savings grown at `growthRate` to the end of the tenure.
   futureValue: string
-  requiredMonthlyInvestment: string
-  totalInvestmentNeeded: string
-  gap: string
-  monthlyInvestmentAfterInflation: string
+  // Gap = futureCost − futureValue (capped at 0 if already met).
+  finalCorpus: string
+  // Monthly investment needed to accumulate `finalCorpus` at `annualInvestmentRate`.
+  monthlyInv: string
+  // Annual equivalent = monthlyInv × 12.
+  annualInv: string
+  // Monthly rate used in the annuity formula (for transparency).
+  rateOfReturn: string
 }
 
 // Cash Flow Analyzer

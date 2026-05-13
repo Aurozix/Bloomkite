@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { calculateGoalPlan } from '@/lib/calculators/goalPlanner'
-import { GoalPlannerResult } from '@/lib/calculators/types'
+import { GoalPlannerResult, GoalPlannerTenureType } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
 
 export default function GoalPlanner() {
@@ -16,11 +16,12 @@ export default function GoalPlanner() {
 
   // Form inputs
   const [goalAmount, setGoalAmount] = useState('5000000')
-  const [currentSavings, setCurrentSavings] = useState('100000')
-  const [tenureYears, setTenureYears] = useState('10')
+  const [currentAmount, setCurrentAmount] = useState('1000000')
+  const [tenure, setTenure] = useState('10')
+  const [tenureType, setTenureType] = useState<GoalPlannerTenureType>('YEAR')
   const [inflationRate, setInflationRate] = useState('5')
-  const [growthRate, setGrowthRate] = useState('7')
-  const [investmentRate, setInvestmentRate] = useState('10')
+  const [growthRate, setGrowthRate] = useState('8')
+  const [annualInvestmentRate, setAnnualInvestmentRate] = useState('10')
 
   // Results
   const [results, setResults] = useState<GoalPlannerResult | null>(null)
@@ -54,11 +55,12 @@ export default function GoalPlanner() {
 
       const result = calculateGoalPlan({
         goalAmount: parseFloat(goalAmount),
-        currentSavings: parseFloat(currentSavings),
-        tenureYears: parseFloat(tenureYears),
+        currentAmount: parseFloat(currentAmount),
+        tenure: parseFloat(tenure),
+        tenureType,
         inflationRate: parseFloat(inflationRate),
         growthRate: parseFloat(growthRate),
-        investmentRate: parseFloat(investmentRate),
+        annualInvestmentRate: parseFloat(annualInvestmentRate),
       })
 
       setResults(result)
@@ -82,11 +84,12 @@ export default function GoalPlanner() {
           calculator_type: 'goal-planner',
           inputs: {
             goalAmount,
-            currentSavings,
-            tenureYears,
+            currentAmount,
+            tenure,
+            tenureType,
             inflationRate,
             growthRate,
-            investmentRate,
+            annualInvestmentRate,
           },
           results: resultData,
           is_draft: true,
@@ -111,11 +114,12 @@ export default function GoalPlanner() {
           name: `Goal Plan - ₹${parseFloat(goalAmount).toLocaleString('en-IN')}`,
           inputs: {
             goalAmount,
-            currentSavings,
-            tenureYears,
+            currentAmount,
+            tenure,
+            tenureType,
             inflationRate,
             growthRate,
-            investmentRate,
+            annualInvestmentRate,
           },
           results,
           is_draft: false,
@@ -176,26 +180,38 @@ export default function GoalPlanner() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">Current Savings (₹)</label>
               <input
                 type="number"
-                value={currentSavings}
-                onChange={(e) => setCurrentSavings(e.target.value)}
+                value={currentAmount}
+                onChange={(e) => setCurrentAmount(e.target.value)}
                 className="input-modern w-full"
-                placeholder="100000"
+                placeholder="1000000"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Tenure (Years)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Tenure</label>
               <input
                 type="number"
-                value={tenureYears}
-                onChange={(e) => setTenureYears(e.target.value)}
+                value={tenure}
+                onChange={(e) => setTenure(e.target.value)}
                 className="input-modern w-full"
                 placeholder="10"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Inflation Rate (%)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Tenure Unit</label>
+              <select
+                value={tenureType}
+                onChange={(e) => setTenureType(e.target.value as GoalPlannerTenureType)}
+                className="input-modern w-full"
+              >
+                <option value="YEAR">Years</option>
+                <option value="MONTH">Months</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Inflation Rate (% p.a.)</label>
               <input
                 type="number"
                 step="0.1"
@@ -207,14 +223,14 @@ export default function GoalPlanner() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Growth Rate (%)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Growth Rate (% p.a.)</label>
               <input
                 type="number"
                 step="0.1"
                 value={growthRate}
                 onChange={(e) => setGrowthRate(e.target.value)}
                 className="input-modern w-full"
-                placeholder="7"
+                placeholder="8"
               />
             </div>
 
@@ -223,8 +239,8 @@ export default function GoalPlanner() {
               <input
                 type="number"
                 step="0.1"
-                value={investmentRate}
-                onChange={(e) => setInvestmentRate(e.target.value)}
+                value={annualInvestmentRate}
+                onChange={(e) => setAnnualInvestmentRate(e.target.value)}
                 className="input-modern w-full"
                 placeholder="10"
               />
@@ -247,23 +263,33 @@ export default function GoalPlanner() {
 
             <div className="grid md:grid-cols-2 gap-6 mb-8">
               <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Future Value (adjusted for inflation)</p>
-                <p className="text-3xl font-bold text-blue-600">₹{parseFloat(results.futureValue).toLocaleString('en-IN')}</p>
+                <p className="text-sm text-gray-600 mb-1">Future Cost of Goal (inflation-adjusted)</p>
+                <p className="text-3xl font-bold text-blue-600">₹{parseFloat(results.futureCost).toLocaleString('en-IN')}</p>
               </div>
 
               <div className="bg-green-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Required Monthly Investment</p>
-                <p className="text-3xl font-bold text-green-600">₹{parseFloat(results.requiredMonthlyInvestment).toLocaleString('en-IN')}</p>
+                <p className="text-3xl font-bold text-green-600">₹{parseFloat(results.monthlyInv).toLocaleString('en-IN')}</p>
               </div>
 
               <div className="bg-purple-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Total Investment Needed</p>
-                <p className="text-2xl font-bold text-purple-600">₹{parseFloat(results.totalInvestmentNeeded).toLocaleString('en-IN')}</p>
+                <p className="text-sm text-gray-600 mb-1">Current Savings, Grown</p>
+                <p className="text-2xl font-bold text-purple-600">₹{parseFloat(results.futureValue).toLocaleString('en-IN')}</p>
               </div>
 
               <div className="bg-orange-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-600 mb-1">Gap to Fill</p>
-                <p className="text-2xl font-bold text-orange-600">₹{parseFloat(results.gap).toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-bold text-orange-600">₹{parseFloat(results.finalCorpus).toLocaleString('en-IN')}</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Annual Investment Equivalent</p>
+                <p className="text-2xl font-bold text-gray-800">₹{parseFloat(results.annualInv).toLocaleString('en-IN')}</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Monthly Rate Used</p>
+                <p className="text-2xl font-bold text-gray-800">{(parseFloat(results.rateOfReturn) * 100).toFixed(3)}%</p>
               </div>
             </div>
 
@@ -271,11 +297,11 @@ export default function GoalPlanner() {
               <p className="text-sm text-gray-600 mb-2">Summary</p>
               <p className="text-gray-700">
                 To accumulate ₹{parseFloat(goalAmount).toLocaleString('en-IN')} in{' '}
-                {tenureYears} years with {inflationRate}% inflation, you need to save{' '}
+                {tenure} {tenureType === 'YEAR' ? 'years' : 'months'} with {inflationRate}% inflation, you need to save{' '}
                 <span className="font-bold" style={{ color: 'var(--primary-600)' }}>
-                  ₹{parseFloat(results.requiredMonthlyInvestment).toLocaleString('en-IN')} per month
+                  ₹{parseFloat(results.monthlyInv).toLocaleString('en-IN')} per month
                 </span>
-                . This assumes {growthRate}% growth on current savings and {investmentRate}% returns on monthly investments.
+                . This assumes {growthRate}% growth on current savings and {annualInvestmentRate}% returns on monthly investments.
               </p>
             </div>
 

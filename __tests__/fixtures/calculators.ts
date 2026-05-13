@@ -9,40 +9,48 @@ import {
 } from '@/lib/calculators/types'
 
 export const goalPlannerInputs = {
+  // Canonical Calculators_Requirements.md §1.1 scenario:
+  // ₹50L goal, 10yr, 5% inflation, ₹10L current savings at 8%, 10% returns.
+  // Spec §1.4 quotes monthlyInv ≈ ₹44,124.56 but the figure is inconsistent
+  // with its own formula — see goalPlanner.test.ts for the actual derived value.
   basic: {
     goalAmount: 5000000,
-    currentSavings: 500000,
-    tenureYears: 10,
+    currentAmount: 1000000,
+    tenure: 10,
+    tenureType: 'YEAR',
     inflationRate: 5,
     growthRate: 8,
-    investmentRate: 12,
+    annualInvestmentRate: 10,
   } as GoalPlannerInput,
 
   aggressive: {
     goalAmount: 10000000,
-    currentSavings: 1000000,
-    tenureYears: 5,
+    currentAmount: 1000000,
+    tenure: 5,
+    tenureType: 'YEAR',
     inflationRate: 6,
     growthRate: 10,
-    investmentRate: 15,
+    annualInvestmentRate: 15,
   } as GoalPlannerInput,
 
   conservative: {
     goalAmount: 2000000,
-    currentSavings: 1000000,
-    tenureYears: 15,
+    currentAmount: 1000000,
+    tenure: 15,
+    tenureType: 'YEAR',
     inflationRate: 4,
     growthRate: 6,
-    investmentRate: 8,
+    annualInvestmentRate: 8,
   } as GoalPlannerInput,
 
   zeroCurrentSavings: {
     goalAmount: 1000000,
-    currentSavings: 0,
-    tenureYears: 10,
+    currentAmount: 0,
+    tenure: 10,
+    tenureType: 'YEAR',
     inflationRate: 5,
     growthRate: 8,
-    investmentRate: 12,
+    annualInvestmentRate: 12,
   } as GoalPlannerInput,
 }
 

@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (Loans cluster complete — all 15 calculators in)
+**Last Updated**: 2026-05-13 (Loans cluster complete; functional review of Goal Planner done)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -230,15 +230,23 @@ Per BRD §12.5 / §7.2:
 
 ## 12. Calculator-spec compliance (the 10 that exist)
 
-Functional pass against the spec is **not yet done**. Risk areas to verify:
+Per-calculator functional pass against [Calculators_Requirements.md](Calculators_Requirements.md). Status:
 
-- **Goal Planner**: BRD example expects ₹44,124.56/month for canonical inputs. Confirm `lib/calculators/goalPlanner.ts` matches.
-- **Risk Profiler**: BRD §6.3 fixes 5 score bands + exact allocation %s. Confirm bands/allocations.
-- **Cash Flow**: BRD §2.5 — only `isRecurring=true` items count. Confirm filter.
-- **Net Worth**: BRD §3.3 — expects both current and future-value sums + growth %.
-- **Insurance**: BRD §5.3 — all four stability×predictability cells reduce to 10 or 15.
+| # | Calculator | Spec compliance | Notes |
+|---|---|---|---|
+| 1 | Goal Planner | ✅ reviewed 2026-05-13 | Output shape + math now align to §1.3/§1.4. Spec's example value (₹44,124.56) is inconsistent with its own formula; impl asserts the mathematically correct ~₹28,978. Spec text in §1.3 step 5 also gives the wrong formula (PMT-amortization instead of FV-annuity-inverse); impl uses correct accumulation formula. Rate convention now nominal monthly per spec, timing annuity-due per §1.6. |
+| 2 | Cash Flow | ❌ not reviewed | BRD §2.5 — only `isRecurring=true` items count. Confirm filter. |
+| 3 | Net Worth | ❌ not reviewed | BRD §3.3 — expects both current and future-value sums + growth %. |
+| 4 | Priority Ranker | ❌ not reviewed | |
+| 5 | Insurance Needs | ❌ not reviewed | BRD §5.3 — all four stability×predictability cells reduce to 10 or 15. |
+| 6 | Risk Profiler | ❌ not reviewed | BRD §6.3 fixes 5 score bands + exact allocation %s. Confirm bands/allocations. |
+| 7 | Future Value | ❌ not reviewed | |
+| 8 | Target Value | ❌ not reviewed | |
+| 9 | Rate Finder | ❌ not reviewed | |
+| 10 | Tenure Finder | ❌ not reviewed | |
+| 11–15 | Loans cluster | 🟡 partial | Tests cover canonical scenarios; spec example values for §11.5, §12.5, §15 are internally inconsistent (formulas don't yield quoted figures). Implementations follow correct math; spec inconsistencies documented in commit history. |
 
-Use `functional-review` skill against `lib/calculators/` for certainty.
+**Recurring spec-quality issue:** four sections (§1.4, §11.5, §12.5, §15.5) quote example output values that do not derive from the formulas given in the same section. Track separately as a spec-side bug if/when the spec moves to v2.
 
 ---
 
@@ -277,6 +285,7 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §12 Goal Planner functional review. Rewrote [`lib/calculators/goalPlanner.ts`](../../lib/calculators/goalPlanner.ts) to align with Calculators_Requirements.md §1: nominal monthly rate (was effective), annuity-due timing per §1.6 (was ordinary), FV-of-annuity-inverse for monthly accumulation (impl was already correct here; spec §1.3 step 5 text is wrong — uses PMT-amortization formula). Renamed/added output fields to match spec: `futureCost`, `futureValue` (current savings grown), `finalCorpus`, `monthlyInv`, `annualInv`, `rateOfReturn`. Added `tenureType` input (MONTH | YEAR). Updated [page](../../app/calculators/goal-planner/page.tsx), [fixtures](../../__tests__/fixtures/calculators.ts), [tests](../../__tests__/unit/lib/calculators/goalPlanner.test.ts). For the canonical §1 example (₹50L/10yr/5% infl/₹10L@8%/10% returns), the correct monthlyInv is ~₹28,978 — the spec's quoted ₹44,124.56 doesn't follow from its own formula (same internal-inconsistency pattern as §11.5, §12.5, §15.5). Tests now assert the mathematically correct value, with the discrepancy documented inline.
 - **2026-05-13** — Rate Change Impact Calculator — §1 row 15 (❌ → ✅). **Loans cluster complete; all 15 calculators in.** New: [`lib/calculators/rateChange.ts`](../../lib/calculators/rateChange.ts), [`app/calculators/rate-change/page.tsx`](../../app/calculators/rate-change/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/rateChange.test.ts`](../../__tests__/unit/lib/calculators/rateChange.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Single library call computes BOTH approaches per spec §15.3 — Approach A (EMI fixed, tenure adjusts) and Approach B (tenure fixed, EMI adjusts) — so the UI can show side-by-side comparison cards. This is a strict superset of the spec's single-mode-per-call output shape; each approach result still populates the spec-required fields (`revisedTenure`, `revisedEmi`, `emiChange`, `tenureChange`, `interestSaved`, `rateChangeType`, `newAmortisation`). Approach A inherits the divergence detection from EMI Change Impact (a rate hike that pushes monthly interest above the static EMI cannot amortize). Approach B never diverges by construction. Reuses `emiFromLoan` + the four date helpers from [`lib/calculators/emi.ts`](../../lib/calculators/emi.ts) and the same half-paisa closing-balance epsilon snap pattern.
 - **2026-05-13** — EMI Change Impact Calculator — §1 row 14 (❌ → ✅). New: [`lib/calculators/emiChange.ts`](../../lib/calculators/emiChange.ts), [`app/calculators/emi-change/page.tsx`](../../app/calculators/emi-change/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/emiChange.test.ts`](../../__tests__/unit/lib/calculators/emiChange.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Simulates the loan month-by-month with one or more mid-stream EMI swaps; flags `diverged: true` when an EMI value falls below the monthly interest accrual (negative amortization) so the UI doesn't render a fake "tenure saved". Real bug surfaced + fixed during testing: floating-point drift in the simulation caused the no-change baseline to run 241 months instead of 240 — added a half-paisa epsilon snap to the final-row check. Field renamed from spec's `increasedEmi` to `newEmi` because the field carries the new value regardless of direction; divergence is caught explicitly.
 - **2026-05-13** — Partial Payment Calculator — §1 row 13 (❌ → ✅). New: [`lib/calculators/partialPayment.ts`](../../lib/calculators/partialPayment.ts), [`app/calculators/partial-payment/page.tsx`](../../app/calculators/partial-payment/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/partialPayment.test.ts`](../../__tests__/unit/lib/calculators/partialPayment.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Reuses `emiFromLoan` + extracted date helpers (`parseStartDate`, `formatMonthYear`, `resolveStartOrToday`, `monthsBetween`) now exported from [`lib/calculators/emi.ts`](../../lib/calculators/emi.ts). Implementation simulates month-by-month rather than using the spec §13.3 closed-form remaining-tenure formula, because the spec also requires a full revised amortization array — simulation produces both in one pass. Supports multiple prepayments, prepayment-on-same-month summing, and gracefully drops invalid prepayment dates.
