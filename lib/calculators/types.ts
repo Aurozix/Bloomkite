@@ -122,6 +122,56 @@ export interface RiskProfilerResult {
   cashAllocation: number
 }
 
+// Future Value: how much will P grow at r% for n years
+export interface FutureValueInput {
+  presentValue: number
+  annualRate: number
+  tenureYears: number
+}
+
+export interface FutureValueResult {
+  futureValue: string
+  totalInterest: string
+  effectiveAnnualGrowth: string
+}
+
+// Target Value: how much to invest monthly to reach FV at r% for n years
+export interface TargetValueInput {
+  targetAmount: number
+  annualRate: number
+  tenureYears: number
+}
+
+export interface TargetValueResult {
+  requiredMonthlyInvestment: string
+  totalContribution: string
+  expectedReturns: string
+}
+
+// Rate Finder: what r is needed to grow PV to FV in n years
+export interface RateFinderInput {
+  presentValue: number
+  futureValue: number
+  tenureYears: number
+}
+
+export interface RateFinderResult {
+  requiredAnnualRate: string
+  multiplier: string
+}
+
+// Tenure Finder: how long to grow PV to FV at r%
+export interface TenureFinderInput {
+  presentValue: number
+  futureValue: number
+  annualRate: number
+}
+
+export interface TenureFinderResult {
+  requiredYears: string
+  requiredMonths: string
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string

@@ -9,6 +9,10 @@ import {
   StarIcon,
   ShieldCheckIcon,
   ChartBarIcon,
+  BanknotesIcon,
+  ClockIcon,
+  AdjustmentsHorizontalIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -61,6 +65,34 @@ const calculators: Calculator[] = [
     description: 'Assess your risk tolerance and get personalized investment recommendations',
     icon: CalculatorIcon,
     path: '/calculators/risk-profiler',
+  },
+  {
+    id: 'future-value',
+    name: 'Future Value',
+    description: 'How much will your investment grow at a fixed annual rate?',
+    icon: BanknotesIcon,
+    path: '/calculators/future-value',
+  },
+  {
+    id: 'target-value',
+    name: 'Target Value',
+    description: 'How much to invest monthly to reach your target amount?',
+    icon: ScaleIcon,
+    path: '/calculators/target-value',
+  },
+  {
+    id: 'rate-finder',
+    name: 'Rate Finder',
+    description: 'What annual return rate is needed to reach your goal?',
+    icon: AdjustmentsHorizontalIcon,
+    path: '/calculators/rate-finder',
+  },
+  {
+    id: 'tenure-finder',
+    name: 'Tenure Finder',
+    description: 'How long will it take to reach your target at the given rate?',
+    icon: ClockIcon,
+    path: '/calculators/tenure-finder',
   },
 ]
 
