@@ -13,6 +13,7 @@ import {
   BriefcaseIcon,
 } from '@heroicons/react/24/outline'
 import { ArrowRightIcon } from '@heroicons/react/24/solid'
+import { Logo } from '@/app/components/Logo'
 
 interface User {
   id: string
@@ -106,7 +107,7 @@ export default function Dashboard() {
       <header className="text-white border-b" style={{ background: 'var(--hero-gradient)', borderColor: 'var(--primary-700)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <img src="/Bloomkite.png" alt="Bloomkite" className="h-12 w-12" />
+            <Logo size={40} variant="reverse" />
             <div>
               <h1 className="text-4xl font-bold">Dashboard</h1>
               <p className="text-blue-100 mt-1">Welcome back, {user.email.split('@')[0]}</p>

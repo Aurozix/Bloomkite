@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowRightOnRectangleIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { Logo } from './Logo'
 
 interface SessionUser {
   id: string
@@ -100,13 +101,13 @@ export function Navbar() {
   }
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 backdrop-blur-sm bg-white/85">
+    <nav className="bg-paper/85 backdrop-blur-sm border-b border-ink-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
-        <a href={user ? '/dashboard' : '/'} className="flex items-center gap-2">
-          <img src="/Bloomkite.png" alt="Bloomkite" className="h-8 w-8" />
-          <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Bloomkite
-          </span>
+        <a
+          href={user ? '/dashboard' : '/'}
+          className="flex items-center hover:opacity-90 transition-opacity"
+        >
+          <Logo size={32} withWordmark />
         </a>
 
         <div className="hidden md:flex items-center gap-6">
@@ -135,7 +136,7 @@ export function Navbar() {
                   {user.email.split('@')[0]}
                 </span>
                 {user.current_role && (
-                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-forest-500 bg-forest-50 px-2 py-0.5 rounded-full">
                     {user.current_role}
                   </span>
                 )}
@@ -186,7 +187,7 @@ export function Navbar() {
           ) : (
             <a
               href="/auth/signin"
-              className="text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2 rounded-lg hover:opacity-90 transition"
+              className="text-sm font-semibold text-paper bg-forest-400 hover:bg-forest-500 px-4 py-2 rounded-bk-md transition-colors"
             >
               Sign in
             </a>
@@ -209,10 +210,10 @@ function NavLink({
   return (
     <a
       href={href}
-      className={`text-sm font-medium transition ${
+      className={`text-sm font-medium transition-colors ${
         active
-          ? 'text-blue-600'
-          : 'text-gray-700 hover:text-gray-900'
+          ? 'text-forest-700'
+          : 'text-ink-600 hover:text-ink-900'
       }`}
     >
       {children}

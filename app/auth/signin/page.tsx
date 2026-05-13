@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/app/components/toast-context'
+import { Logo } from '@/app/components/Logo'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -95,7 +96,9 @@ export default function SignIn() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-12">
-          <img src="/Bloomkite.png" alt="Bloomkite" className="h-20 w-20 mx-auto mb-6" />
+          <div className="flex justify-center mb-6">
+            <Logo size={56} />
+          </div>
           <h1 className="text-4xl font-bold gradient-text mb-3">
             Bloomkite
           </h1>

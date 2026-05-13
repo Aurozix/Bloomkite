@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ColorSchemeSelector } from '@/app/components/color-scheme-selector'
 import { useToast } from '@/app/components/toast-context'
+import { Logo } from '@/app/components/Logo'
 
 interface AdminStats {
   totalUsers: number
@@ -81,7 +82,7 @@ export default function AdminPage() {
       <header className="text-white border-b" style={{ background: 'var(--hero-gradient)', borderColor: 'var(--primary-700)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <img src="/Bloomkite.png" alt="Bloomkite" className="h-12 w-12" />
+            <Logo size={40} variant="reverse" />
             <div>
               <h1 className="text-4xl font-bold">Admin Panel</h1>
               <p className="text-blue-100 mt-1">Content Moderation & System Management</p>

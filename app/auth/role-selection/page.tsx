@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import { WalletIcon, BriefcaseIcon } from '@heroicons/react/24/outline'
+import { Logo } from '@/app/components/Logo'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -80,7 +81,9 @@ export default function RoleSelection() {
       <div className="w-full max-w-3xl">
         {/* Header */}
         <div className="text-center mb-12">
-          <img src="/Bloomkite.png" alt="Bloomkite" className="h-20 w-20 mx-auto mb-6" />
+          <div className="flex justify-center mb-6">
+            <Logo size={56} />
+          </div>
           <h1 className="text-4xl font-bold gradient-text mb-3">
             Welcome to Bloomkite
           </h1>
