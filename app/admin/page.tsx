@@ -8,6 +8,7 @@ import {
   DocumentTextIcon,
   CheckCircleIcon,
   ClockIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { ColorSchemeSelector } from '@/app/components/color-scheme-selector'
 import { useToast } from '@/app/components/toast-context'
@@ -151,8 +152,8 @@ export default function AdminPage() {
 
         {/* Action Cards */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Moderation</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Operations</h2>
+          <div className="grid md:grid-cols-3 gap-6">
             <a
               href="/admin/content"
               className="card p-8 hover:shadow-xl transition cursor-pointer group"
@@ -178,6 +179,20 @@ export default function AdminPage() {
               </p>
               <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition text-forest-500">
                 Manage Users →
+              </div>
+            </a>
+
+            <a
+              href="/admin/ai-features"
+              className="card p-8 hover:shadow-xl transition cursor-pointer group"
+            >
+              <SparklesIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform text-forest-500" />
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">AI Features</h3>
+              <p className="text-gray-600 mb-6">
+                Toggle individual AI features on or off. Every feature is opt-in and ships disabled by default.
+              </p>
+              <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition text-forest-500">
+                Manage Toggles →
               </div>
             </a>
           </div>

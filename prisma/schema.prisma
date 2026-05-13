@@ -454,6 +454,40 @@ model Invoice {
 }
 
 // ============================================================================
+// AI feature flags
+// ============================================================================
+
+/// One row per AI-shaped feature in the product. Toggled from /admin/ai-features
+/// by users with the `manage_ai_features` permission. Default `isEnabled =
+/// false` on every insert — AI features are opt-in, never opt-out. Brand voice
+/// and SEBI compliance both demand that.
+///
+/// `slug` is the primary key and the runtime lookup key. Pick stable values
+/// (`nri-tax-explainer`, `calc-narration`, `forum-pre-moderation`). Don't rename
+/// once shipped; the runtime `isAIFeatureEnabled('...')` calls would silently
+/// return false.
+///
+/// `category` groups features in the admin UI: 'investor-support',
+/// 'content-moderation', 'advisor-tools'. Free-form on insert; UI groups
+/// by exact string match.
+///
+/// `updatedBy` references the admin who last toggled the flag. Each toggle
+/// also writes a row to admin_audit with action='ai_feature.toggle'.
+model AIFeature {
+  slug        String   @id @db.VarChar(100)
+  category    String   @db.VarChar(50)
+  name        String   @db.VarChar(150)
+  description String
+  isEnabled   Boolean  @default(false) @map("is_enabled")
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([category], map: "idx_ai_features_category")
+  @@map("ai_features")
+}
+
+// ============================================================================
 // Admin audit log
 // ============================================================================
 
