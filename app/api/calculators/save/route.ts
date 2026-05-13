@@ -3,13 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables')
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 interface SaveCalculatorRequest {
   calculator_type: string
@@ -28,18 +22,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Extract user ID from JWT
-    const parts = accessToken.split('.')
-    if (parts.length !== 3) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    })
 
-    // Decode JWT payload
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'))
-    const userId = payload.sub
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Invalid token payload' }, { status: 401 })
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body: SaveCalculatorRequest = await request.json()
@@ -51,9 +48,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert or update financial plan
     const { data, error } = await supabase.from('financial_plans').insert({
-      user_id: userId,
+      user_id: user.id,
       calculator_type: body.calculator_type,
       name: body.name || `${body.calculator_type} - ${new Date().toLocaleString()}`,
       inputs: body.inputs,

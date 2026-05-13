@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+// Exact public paths
+const PUBLIC_EXACT = new Set<string>([
+  '/',
+  '/advisors',
+  '/articles',
+  '/forum',
+  '/api/advisors/search',
+])
+
+// Public prefixes (request path must start with one of these)
+const PUBLIC_PREFIXES = [
+  '/auth/',
+  '/advisors/',
+  '/articles/',
+  '/forum/',
+  '/api/auth/',
+]
+
+function isPublic(pathname: string): boolean {
+  if (PUBLIC_EXACT.has(pathname)) return true
+  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+}
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  if (isPublic(pathname)) {
+    return NextResponse.next()
+  }
+
+  const accessToken = request.cookies.get('sb-access-token')?.value
+  if (accessToken) {
+    return NextResponse.next()
+  }
+
+  const signInUrl = new URL('/auth/signin', request.url)
+  return NextResponse.redirect(signInUrl)
+}
+
+export const config = {
+  matcher: [
+    // Match everything except Next internals and static assets
+    '/((?!_next/static|_next/image|favicon.ico|Bloomkite.png|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)',
+  ],
+}

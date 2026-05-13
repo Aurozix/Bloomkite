@@ -3,8 +3,31 @@ import { Client } from "pg";
 import * as fs from "fs";
 import * as path from "path";
 
-// Load .env.local
-dotenv.config({ path: path.join(process.cwd(), ".env.local") });
+// Parse --env flag (local | test | prod). Default: local.
+const args = process.argv.slice(2);
+const envFlagIdx = args.indexOf("--env");
+const envArg = envFlagIdx >= 0 ? args[envFlagIdx + 1] : "local";
+
+const envFileMap: Record<string, string> = {
+  local: ".env.local",
+  test: ".env.test",
+  prod: ".env.prod",
+};
+
+const envFile = envFileMap[envArg];
+if (!envFile) {
+  console.error(`❌ Unknown --env value '${envArg}'. Expected: local | test | prod`);
+  process.exit(1);
+}
+
+const envPath = path.join(process.cwd(), envFile);
+if (!fs.existsSync(envPath)) {
+  console.error(`❌ Env file not found: ${envFile}`);
+  process.exit(1);
+}
+
+dotenv.config({ path: envPath });
+console.log(`🌱 Loaded env from ${envFile} (env=${envArg})`);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;

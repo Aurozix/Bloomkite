@@ -16,6 +16,8 @@ out/
 # Environment files — never commit secrets
 .env
 .env.local
+.env.test
+.env.prod
 .env.production
 .env.*.local
 

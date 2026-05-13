@@ -7,14 +7,35 @@ jest.mock('next/headers', () => ({
 }))
 
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn((table) => ({
-      insert: jest.fn().mockResolvedValue({
-        data: { id: 'plan-123', success: true },
-        error: null,
-      }),
-    })),
-  })),
+  createClient: jest.fn((_url: string, _key: string, opts?: any) => {
+    const authHeader: string =
+      opts?.global?.headers?.Authorization || ''
+    const token = authHeader.replace(/^Bearer\s+/, '')
+    const isValid = token.split('.').length === 3
+
+    return {
+      auth: {
+        getUser: jest.fn().mockImplementation(() => {
+          if (!isValid) {
+            return Promise.resolve({
+              data: { user: null },
+              error: { message: 'invalid token' },
+            })
+          }
+          return Promise.resolve({
+            data: { user: { id: 'test-user-123' } },
+            error: null,
+          })
+        }),
+      },
+      from: jest.fn((_table: string) => ({
+        insert: jest.fn().mockResolvedValue({
+          data: { id: 'plan-123', success: true },
+          error: null,
+        }),
+      })),
+    }
+  }),
 }))
 
 describe('Save Calculator Route', () => {

@@ -11,6 +11,10 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
     const { email, role } = await request.json();
 
@@ -158,7 +162,7 @@ export async function POST(request: NextRequest) {
 
     response.cookies.set("sb-access-token", sessionData.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
@@ -167,7 +171,7 @@ export async function POST(request: NextRequest) {
     if (sessionData.refresh_token) {
       response.cookies.set("sb-refresh-token", sessionData.refresh_token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: false,
         sameSite: "lax",
         maxAge: 60 * 60 * 24 * 30,
         path: "/",
