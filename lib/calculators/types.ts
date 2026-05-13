@@ -231,6 +231,42 @@ export interface EMICapacityResult {
   stabilityMultiplier: string
 }
 
+// Partial Payment Calculator: impact of one or more lump-sum prepayments
+// on a running loan. EMI stays the same; tenure shortens; interest drops.
+export interface PartialPaymentEntry {
+  partPayDate: string
+  partPayAmount: number
+}
+
+export interface PartialPaymentInput {
+  loanAmount: number
+  interestRate: number
+  tenure: number
+  tenureType: EMITenureType
+  loanDate?: string
+  partialPaymentReq: PartialPaymentEntry[]
+}
+
+// Amortization row with an optional partial-payment column. Reuses the same
+// shape as the EMI schedule so the UI can render either table.
+export interface PartialPaymentRow extends EMIAmortizationRow {
+  partialPayment: string
+}
+
+export interface PartialPaymentResult {
+  emi: string
+  originalTenureMonths: number
+  originalTenureYears: string
+  originalTotalInterest: string
+  revisedTenureMonths: number
+  revisedTenureYears: string
+  tenureReductionMonths: number
+  tenureReductionYears: string
+  totalInterestNow: string
+  interestSaved: string
+  newAmortisation: PartialPaymentRow[]
+}
+
 // Generic save/load types
 export interface SaveCalculatorInput {
   calculator_type: string

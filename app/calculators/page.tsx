@@ -15,6 +15,7 @@ import {
   ScaleIcon,
   HomeModernIcon,
   WalletIcon,
+  ReceiptPercentIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -109,6 +110,13 @@ const calculators: Calculator[] = [
     description: 'Maximum loan you can afford from your income, expenses, and stability',
     icon: WalletIcon,
     path: '/calculators/emi-capacity',
+  },
+  {
+    id: 'partial-payment',
+    name: 'Partial Payment Impact',
+    description: 'How lump-sum prepayments shorten your loan tenure and save interest',
+    icon: ReceiptPercentIcon,
+    path: '/calculators/partial-payment',
   },
 ]
 

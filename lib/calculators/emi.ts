@@ -36,7 +36,7 @@ export function loanFromEmi(
   return emi.times(pow.minus(1)).dividedBy(monthlyRate.times(pow))
 }
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   'Jan',
   'Feb',
   'Mar',
@@ -53,7 +53,7 @@ const MONTH_NAMES = [
 
 // Parse a "MMM-yyyy" string (e.g. "Jan-2026") into a [year, monthIndex] tuple.
 // Returns null on any parse failure; the caller falls back to "today".
-function parseStartDate(input?: string): { year: number; monthIndex: number } | null {
+export function parseStartDate(input?: string): { year: number; monthIndex: number } | null {
   if (!input) return null
   const m = input.trim().match(/^([A-Za-z]{3})-(\d{4})$/)
   if (!m) return null
@@ -66,8 +66,27 @@ function parseStartDate(input?: string): { year: number; monthIndex: number } | 
   return { year, monthIndex }
 }
 
-function formatMonthYear(year: number, monthIndex: number): string {
+export function formatMonthYear(year: number, monthIndex: number): string {
   return `${MONTH_NAMES[monthIndex]}-${year}`
+}
+
+// Resolve a MMM-yyyy start date, falling back to the current month if missing
+// or malformed. Used by every calculator that emits an amortization schedule.
+export function resolveStartOrToday(input?: string): { year: number; monthIndex: number } {
+  const parsed = parseStartDate(input)
+  if (parsed) return parsed
+  const now = new Date()
+  return { year: now.getFullYear(), monthIndex: now.getMonth() }
+}
+
+// Compute the absolute month offset between two MMM-yyyy dates.
+// Returns null if either date is unparseable. Negative result means
+// `target` is before `start`.
+export function monthsBetween(start: string, target: string): number | null {
+  const s = parseStartDate(start)
+  const t = parseStartDate(target)
+  if (!s || !t) return null
+  return (t.year - s.year) * 12 + (t.monthIndex - s.monthIndex)
 }
 
 // EMI = P × [r × (1+r)^n] / [(1+r)^n − 1]
@@ -103,10 +122,7 @@ export function calculateEmi(input: EMICalculatorInput): EMICalculatorResult {
   // Build amortization schedule. The last row's closing balance is forced to
   // zero so floating-point drift over hundreds of months doesn't leave a
   // residual rupee balance.
-  const start = parseStartDate(input.startDate) ?? (() => {
-    const now = new Date()
-    return { year: now.getFullYear(), monthIndex: now.getMonth() }
-  })()
+  const start = resolveStartOrToday(input.startDate)
 
   const schedule: EMIAmortizationRow[] = []
   let opening = principal

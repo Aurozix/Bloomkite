@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (EMI + EMI Capacity calculators landed)
+**Last Updated**: 2026-05-13 (EMI, EMI Capacity, Partial Payment calculators landed)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -26,7 +26,7 @@ This is a living document. Whenever work ships that moves a row's status:
 
 ---
 
-## 1. Calculators — 12 of 15 done
+## 1. Calculators — 13 of 15 done
 
 | # | Calculator | Page | Lib | Status | Notes |
 |---|---|---|---|---|---|
@@ -42,11 +42,11 @@ This is a living document. Whenever work ships that moves a row's status:
 | 10 | Tenure Finder | [page](../../app/calculators/tenure-finder/page.tsx) | [lib](../../lib/calculators/tenureFinder.ts) | ✅ | |
 | 11 | EMI | [page](../../app/calculators/emi/page.tsx) | [lib](../../lib/calculators/emi.ts) | ✅ | Unlocks loans cluster |
 | 12 | EMI Capacity | [page](../../app/calculators/emi-capacity/page.tsx) | [lib](../../lib/calculators/emiCapacity.ts) | ✅ | Reuses `loanFromEmi` helper from EMI lib |
-| 13 | **Partial Payment** | — | — | ❌ | Depends on EMI |
+| 13 | Partial Payment | [page](../../app/calculators/partial-payment/page.tsx) | [lib](../../lib/calculators/partialPayment.ts) | ✅ | Simulates month-by-month with prepayments |
 | 14 | **EMI Change Impact** | — | — | ❌ | Depends on EMI |
 | 15 | **Rate Change Impact** | — | — | ❌ | Depends on EMI |
 
-**Loans cluster: 2/5 done.** EMI + EMI Capacity in. The three remaining (Partial Payment, EMI Change Impact, Rate Change Impact) all chain off the same amortization core.
+**Loans cluster: 3/5 done.** EMI + EMI Capacity + Partial Payment in. EMI Change Impact and Rate Change Impact remain — both reuse the same amortization simulation pattern that just landed.
 
 ---
 
@@ -277,6 +277,7 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — Partial Payment Calculator — §1 row 13 (❌ → ✅). New: [`lib/calculators/partialPayment.ts`](../../lib/calculators/partialPayment.ts), [`app/calculators/partial-payment/page.tsx`](../../app/calculators/partial-payment/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/partialPayment.test.ts`](../../__tests__/unit/lib/calculators/partialPayment.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Reuses `emiFromLoan` + extracted date helpers (`parseStartDate`, `formatMonthYear`, `resolveStartOrToday`, `monthsBetween`) now exported from [`lib/calculators/emi.ts`](../../lib/calculators/emi.ts). Implementation simulates month-by-month rather than using the spec §13.3 closed-form remaining-tenure formula, because the spec also requires a full revised amortization array — simulation produces both in one pass. Supports multiple prepayments, prepayment-on-same-month summing, and gracefully drops invalid prepayment dates.
 - **2026-05-13** — EMI Capacity Calculator — §1 row 12 (❌ → ✅). New: [`lib/calculators/emiCapacity.ts`](../../lib/calculators/emiCapacity.ts), [`app/calculators/emi-capacity/page.tsx`](../../app/calculators/emi-capacity/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/emiCapacity.test.ts`](../../__tests__/unit/lib/calculators/emiCapacity.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Extracted `emiFromLoan` + `loanFromEmi` helpers from [`lib/calculators/emi.ts`](../../lib/calculators/emi.ts) so the inverse-annuity math is shared (EMI Calc refactored to use `emiFromLoan`; all 18 EMI tests still pass). Note: spec §12.5 quotes ₹48.45L for the canonical case, but the §12.3 formula yields ~₹53.80L from EMI=45,000 at 8%/240mo — implementation follows the formula, not the spec's example value (same internal-inconsistency pattern as §11.5).
 - **2026-05-13** — EMI Calculator — §1 row 11 (❌ → ✅). New: [`lib/calculators/emi.ts`](../../lib/calculators/emi.ts), [`app/calculators/emi/page.tsx`](../../app/calculators/emi/page.tsx), types in [`lib/calculators/types.ts`](../../lib/calculators/types.ts), unit tests in [`__tests__/unit/lib/calculators/emi.test.ts`](../../__tests__/unit/lib/calculators/emi.test.ts), tile added to [`app/calculators/page.tsx`](../../app/calculators/page.tsx). Note: spec §11.5 quotes EMI ≈ ₹27,748 for the canonical 30L/8%/20yr example, but the standard EMI formula yields ₹25,093.10; implementation follows the formula, not the spec's example value (documented in test).
 - **2026-05-13** — Initial gap analysis created. Snapshot: 10/15 calculators done, subscriptions/auth shells in place, plan-sharing and master-data absent, no notifications/compliance pages.
