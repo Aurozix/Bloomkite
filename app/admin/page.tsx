@@ -39,7 +39,11 @@ export default function AdminPage() {
         const sessionResponse = await fetch('/api/auth/session')
         const sessionData = await sessionResponse.json()
 
-        if (!sessionData.user || sessionData.user.current_role !== 'admin') {
+        // Auth.js session shape: roles array + camelCase currentRole. Allow
+        // any user who holds the 'admin' role regardless of current_role, so
+        // multi-role admins don't have to switch context first.
+        const roles: string[] = sessionData?.user?.roles ?? []
+        if (!sessionData?.user || !roles.includes('admin')) {
           addToast('Admin access required', 'error')
           router.push('/dashboard')
           return
@@ -163,16 +167,19 @@ export default function AdminPage() {
               </div>
             </a>
 
-            <div className="card p-8 border-2 border-gray-300">
-              <UsersIcon className="h-16 w-16 mb-4" style={{ color: 'var(--secondary-600)' }} />
+            <a
+              href="/admin/users"
+              className="card p-8 hover:shadow-xl transition cursor-pointer group"
+            >
+              <UsersIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform text-saffron-500" />
               <h3 className="text-2xl font-bold text-gray-900 mb-3">User Management</h3>
               <p className="text-gray-600 mb-6">
-                Coming soon: Manage user accounts, roles, and permissions
+                Search users, assign or remove roles, disable accounts, and review the audit trail.
               </p>
-              <div className="inline-block px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-semibold">
-                In Development
+              <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition text-forest-500">
+                Manage Users →
               </div>
-            </div>
+            </a>
           </div>
         </section>
       </main>

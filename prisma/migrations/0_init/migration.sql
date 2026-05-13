@@ -1,9 +1,12 @@
-
-> bloomkite@1.0.0 prisma
-> dotenv -e .env.local -- prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
-
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
+
+-- Bootstrap the `extensions` schema. The Supabase CLI's local Postgres creates
+-- this automatically and installs uuid-ossp there, but Prisma's shadow DB used
+-- by `migrate dev` is a fresh instance with neither. Without this, every
+-- `extensions.uuid_generate_v4()` default in the schema fails to replay.
+CREATE SCHEMA IF NOT EXISTS "extensions";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA "extensions";
 
 -- CreateTable
 CREATE TABLE "users" (

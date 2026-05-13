@@ -47,17 +47,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
 
-    // Block sign-in if email is not verified, EXCEPT for OAuth — Google has
-    // already verified the email on its side. Auth.js calls this after the
-    // adapter has created the user row for OAuth flows.
+    // Block sign-in if:
+    //   1. user has been admin-disabled (disabledAt is non-null), OR
+    //   2. email is not verified (credentials only; OAuth providers verify on
+    //      their side, and the adapter has already created the user row).
     async signIn({ user, account }) {
-      if (account?.provider !== 'credentials') return true
       if (!user.email) return false
 
       const dbUser = await prisma.user.findUnique({
         where: { email: user.email },
-        select: { emailVerified: true },
+        select: { emailVerified: true, disabledAt: true },
       })
+
+      // Admin-disabled accounts cannot sign in regardless of provider.
+      if (dbUser?.disabledAt) return false
+
+      // OAuth: Google already verified the email; allow.
+      if (account?.provider !== 'credentials') return true
+
       return dbUser?.emailVerified != null
     },
 

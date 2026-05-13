@@ -19,6 +19,8 @@ datasource db {
 /// passwordHash is null for OAuth-only users. emailVerified is null until the
 /// user clicks the verification link (Google sign-ins are auto-verified by the
 /// signIn callback).
+/// disabledAt is set when an admin soft-disables the account; the signIn
+/// callback in auth.ts blocks any sign-in attempt while it's non-null.
 model User {
   id            String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   email         String    @unique @db.VarChar(255)
@@ -26,6 +28,8 @@ model User {
   image         String?   @map("avatar_url")
   emailVerified DateTime? @map("email_verified") @db.Timestamp(6)
   passwordHash  String?   @map("password_hash") @db.VarChar(255)
+  disabledAt    DateTime? @map("disabled_at") @db.Timestamp(6)
+  disabledBy    String?   @map("disabled_by") @db.Uuid
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
 
@@ -46,8 +50,12 @@ model User {
   forumAnswerVotes    ForumAnswerVote[]
   invoices            Invoice[]
   subscriptions       Subscription[]
+  adminAuditActions   AdminAudit[]         @relation("AdminAuditActor")
+  disabler            User?                @relation("UserDisabler", fields: [disabledBy], references: [id], onDelete: NoAction)
+  disabledUsers       User[]               @relation("UserDisabler")
 
   @@index([email], map: "idx_users_email")
+  @@index([disabledAt], map: "idx_users_disabled_at")
   @@map("users")
 }
 
@@ -443,6 +451,42 @@ model Invoice {
   @@index([subscriptionId], map: "idx_invoices_subscription_id")
   @@index([userId], map: "idx_invoices_user_id")
   @@map("invoices")
+}
+
+// ============================================================================
+// Admin audit log
+// ============================================================================
+
+/// Append-only audit trail for admin actions. Required by BRD §8.3 / §13.2
+/// (audit trail) and SEBI compliance. Never delete rows; never UPDATE except
+/// in extraordinary cases. Actor FK uses NoAction so deleting a former admin
+/// preserves the trail.
+///
+/// `action` is a dot-separated verb: `user.disable`, `user.enable`,
+/// `user.role.add`, `user.role.remove`, `ai_feature.toggle`. Keep them
+/// stable — the admin UI groups + filters by these strings.
+///
+/// `targetType` + `targetId` identify the affected entity. `targetId` is a
+/// string (not a UUID FK) so it can hold either a user UUID or a slug like
+/// "nri-tax-explainer" for AI features. Index covers (targetType, targetId).
+///
+/// `metadata` is free-form JSON; convention is `{ before, after }` for state
+/// transitions. Don't read it from app code; it's for human auditors.
+model AdminAudit {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  targetType  String?  @map("target_type") @db.VarChar(50)
+  targetId    String?  @map("target_id") @db.VarChar(200)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  actor User @relation("AdminAuditActor", fields: [actorUserId], references: [id], onDelete: NoAction)
+
+  @@index([actorUserId], map: "idx_admin_audit_actor")
+  @@index([targetType, targetId], map: "idx_admin_audit_target")
+  @@index([createdAt(sort: Desc)], map: "idx_admin_audit_created")
+  @@map("admin_audit")
 }
 
 // ============================================================================

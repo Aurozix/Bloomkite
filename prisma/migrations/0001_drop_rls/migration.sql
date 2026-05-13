@@ -37,6 +37,15 @@ END $$;
 -- were already dropped in prisma/sql/drop_supabase_auth_coupling.sql
 -- during the initial migration. Re-issuing the drops here is idempotent
 -- so a fresh DB also ends up clean.
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+--
+-- The auth.users reference is wrapped in a schema-existence check so
+-- Prisma's shadow database (a vanilla Postgres without the Supabase auth
+-- schema) can replay this migration cleanly during `migrate dev`.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users';
+  END IF;
+END $$;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_id_fkey;
