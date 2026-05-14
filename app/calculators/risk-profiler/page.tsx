@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { calculateRiskProfile } from '@/lib/calculators/riskProfiler'
 import { RiskProfilerAnswer, RiskProfilerResult } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
+import { Donut } from '@/app/components/charts/Donut'
 
 interface Question {
   number: number
@@ -457,59 +458,43 @@ export default function RiskProfiler() {
 
         {/* Portfolio Allocation */}
         <div className="card p-8 mb-8">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">Recommended Portfolio Allocation</h3>
+          <h3 className="font-serif text-2xl font-medium text-forest-700 mb-6">
+            Recommended portfolio allocation
+          </h3>
 
-          <div className="space-y-4 mb-8">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-900">Equity (Stocks)</span>
-                <span className="font-bold text-lg" style={{ color: 'var(--primary-600)' }}>
-                  {results.equityAllocation}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-300 rounded-full h-3">
-                <div
-                  className="h-3 rounded-full transition-all"
-                  style={{ width: `${results.equityAllocation}%`, backgroundColor: 'var(--primary-600)' }}
-                ></div>
-              </div>
-            </div>
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-8">
+            <Donut
+              size={240}
+              segments={[
+                { label: 'Equity (Stocks)', value: results.equityAllocation, color: '#0B3D2E' },
+                { label: 'Debt (Bonds)', value: results.debtAllocation, color: '#1D9E75' },
+                { label: 'Cash', value: results.cashAllocation, color: '#9DD4BB' },
+              ]}
+              centerLabel={results.riskCategory}
+              centerSubLabel={`Score ${results.totalScore}`}
+              hideLegend
+            />
 
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-900">Debt (Bonds)</span>
-                <span className="font-bold text-lg text-orange-600">{results.debtAllocation}%</span>
-              </div>
-              <div className="w-full bg-gray-300 rounded-full h-3">
-                <div
-                  className="h-3 rounded-full transition-all"
-                  style={{ width: `${results.debtAllocation}%`, backgroundColor: '#ea580c' }}
-                ></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold text-gray-900">Cash</span>
-                <span className="font-bold text-lg text-green-600">{results.cashAllocation}%</span>
-              </div>
-              <div className="w-full bg-gray-300 rounded-full h-3">
-                <div
-                  className="h-3 rounded-full transition-all"
-                  style={{ width: `${results.cashAllocation}%`, backgroundColor: '#059669' }}
-                ></div>
-              </div>
-            </div>
+            {/* Custom legend with the brand-aligned typography. The Donut's
+                built-in legend works too; we render our own here so the
+                breakdown sits next to the chart on desktop. */}
+            <ul className="flex-1 w-full max-w-sm space-y-3">
+              <LegendRow color="#0B3D2E" label="Equity (Stocks)" pct={results.equityAllocation} />
+              <LegendRow color="#1D9E75" label="Debt (Bonds)" pct={results.debtAllocation} />
+              <LegendRow color="#9DD4BB" label="Cash" pct={results.cashAllocation} />
+            </ul>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">What this means:</p>
-            <p className="text-gray-700">
-              Based on your answers, we recommend a portfolio composition of{' '}
-              <span className="font-bold">{results.equityAllocation}% stocks</span>,{' '}
-              <span className="font-bold">{results.debtAllocation}% bonds</span>, and{' '}
-              <span className="font-bold">{results.cashAllocation}% cash</span>. This allocation balances growth
-              potential with your comfort level for volatility and risk.
+          <div className="bg-forest-50 border-l-2 border-forest-200 p-4 rounded-r-bk-md">
+            <p className="text-xs uppercase tracking-[0.12em] font-semibold text-ink-400 mb-2">
+              What this means
+            </p>
+            <p className="text-ink-900 text-sm leading-relaxed">
+              Based on your answers, the recommended composition is{' '}
+              <span className="font-data tabular-nums font-medium">{results.equityAllocation}%</span> stocks,{' '}
+              <span className="font-data tabular-nums font-medium">{results.debtAllocation}%</span> bonds, and{' '}
+              <span className="font-data tabular-nums font-medium">{results.cashAllocation}%</span> cash. This balances
+              growth potential against your tolerance for volatility.
             </p>
           </div>
         </div>
@@ -524,5 +509,19 @@ export default function RiskProfiler() {
         </button>
       </div>
     </div>
+  )
+}
+
+function LegendRow({ color, label, pct }: { color: string; label: string; pct: number }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span
+        aria-hidden="true"
+        className="w-3 h-3 rounded-sm shrink-0"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-ink-900 flex-1">{label}</span>
+      <span className="font-data tabular-nums font-medium text-forest-700">{pct}%</span>
+    </li>
   )
 }
