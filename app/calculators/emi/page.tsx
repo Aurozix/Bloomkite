@@ -2,23 +2,31 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+
 import { calculateEmi } from '@/lib/calculators/emi'
 import { EMICalculatorResult, EMITenureType } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
 import { PaywallGate } from '@/app/components/PaywallGate'
+import { useDebouncedCalc } from '@/lib/hooks/useDebouncedCalc'
+import { CurrencySlider } from '@/app/components/inputs/CurrencySlider'
+import { RateSlider } from '@/app/components/inputs/RateSlider'
+import { TenureChips } from '@/app/components/inputs/TenureChips'
+import { TogglePills } from '@/app/components/inputs/TogglePills'
+import { AmortizationArea } from '@/app/components/charts/AmortizationArea'
+import { Donut } from '@/app/components/charts/Donut'
+import { formatINR } from '@/lib/format-currency'
 
 export default function EmiCalculatorPage() {
   const router = useRouter()
   const { addToast } = useToast()
-  const [loading, setLoading] = useState(true)
+  const [authChecking, setAuthChecking] = useState(true)
   const [saving, setSaving] = useState(false)
-
-  const [loanAmount, setLoanAmount] = useState('3000000')
-  const [tenure, setTenure] = useState('20')
-  const [tenureType, setTenureType] = useState<EMITenureType>('YEAR')
-  const [interestRate, setInterestRate] = useState('8')
-  const [results, setResults] = useState<EMICalculatorResult | null>(null)
   const [showSchedule, setShowSchedule] = useState(false)
+
+  const [loanAmount, setLoanAmount] = useState(3_000_000)
+  const [tenureYears, setTenureYears] = useState(20)
+  const [tenureType, setTenureType] = useState<EMITenureType>('YEAR')
+  const [interestRate, setInterestRate] = useState(8)
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -26,40 +34,24 @@ export default function EmiCalculatorPage() {
       .then(({ user }) => {
         if (!user) router.push('/auth/signin')
       })
-      .finally(() => setLoading(false))
+      .finally(() => setAuthChecking(false))
   }, [router])
 
   const inputsPayload = useMemo(
-    () => ({ loanAmount, tenure, tenureType, interestRate }),
-    [loanAmount, tenure, tenureType, interestRate],
+    () => ({ loanAmount, tenure: tenureYears, tenureType, interestRate }),
+    [loanAmount, tenureYears, tenureType, interestRate]
   )
 
-  const handleCalculate = async () => {
-    try {
-      const r = calculateEmi({
-        loanAmount: parseFloat(loanAmount),
-        tenure: parseFloat(tenure),
+  const results = useDebouncedCalc<EMICalculatorResult>(
+    () =>
+      calculateEmi({
+        loanAmount,
+        tenure: tenureYears,
         tenureType,
-        interestRate: parseFloat(interestRate),
-      })
-      setResults(r)
-      setShowSchedule(false)
-
-      fetch('/api/calculators/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          calculator_type: 'emi',
-          inputs: inputsPayload,
-          results: r,
-          is_draft: true,
-        }),
-      }).catch(() => undefined)
-    } catch (err) {
-      console.error('Calculation error:', err)
-      addToast('Error calculating EMI', 'error')
-    }
-  }
+        interestRate,
+      }),
+    [loanAmount, tenureYears, tenureType, interestRate]
+  )
 
   const handleSave = async () => {
     if (!results) return
@@ -70,6 +62,7 @@ export default function EmiCalculatorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           calculator_type: 'emi',
+          name: 'EMI Calculation',
           inputs: inputsPayload,
           results,
           is_draft: false,
@@ -82,140 +75,179 @@ export default function EmiCalculatorPage() {
     }
   }
 
-  if (loading) {
+  if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-12 w-12 border-4 border-gray-300 border-t-blue-500 rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-paper">
+        <div className="animate-spin h-10 w-10 border-2 border-ink-200 border-t-forest-400 rounded-full" />
       </div>
     )
   }
 
+  const principal = results ? parseFloat(results.loanAmount) : 0
+  const totalInterest = results ? parseFloat(results.interestPayable) : 0
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-paper py-12 px-4">
+      <div className="max-w-6xl mx-auto">
         <a
           href="/calculators"
-          className="text-blue-600 hover:text-blue-700 font-semibold mb-6 inline-block"
+          className="text-forest-700 hover:text-forest-500 font-semibold mb-6 inline-block"
         >
           ← Back to Calculators
         </a>
-        <h1 className="text-4xl font-bold text-gray-900 mb-3">EMI Calculator</h1>
-        <p className="text-gray-600 mb-8">
-          Calculate your monthly loan EMI and see a full month-by-month amortization schedule.
+        <h1 className="font-serif text-4xl text-ink-900 mb-2">EMI Calculator</h1>
+        <p className="text-ink-600 mb-10">
+          Set the dials, see your monthly EMI and how much of every year goes to principal vs interest.
         </p>
 
         <PaywallGate
           requires="silver"
           reason="EMI Calculator is part of the advanced calculator suite. Upgrade to Silver to unlock all 15 calculators."
         >
-          <div className="card p-8 mb-8 grid md:grid-cols-4 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Loan Amount (₹)
-              </label>
-              <input
-                type="number"
-                className="input-modern w-full"
-                value={loanAmount}
-                onChange={(e) => setLoanAmount(e.target.value)}
-                min={0}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tenure
-              </label>
-              <input
-                type="number"
-                className="input-modern w-full"
-                value={tenure}
-                onChange={(e) => setTenure(e.target.value)}
-                min={1}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tenure Unit
-              </label>
-              <select
-                className="input-modern w-full"
-                value={tenureType}
-                onChange={(e) => setTenureType(e.target.value as EMITenureType)}
-              >
-                <option value="YEAR">Years</option>
-                <option value="MONTH">Months</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Interest Rate (% p.a.)
-              </label>
-              <input
-                type="number"
-                className="input-modern w-full"
-                value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value)}
-                step={0.1}
-                min={0}
-              />
-            </div>
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* INPUTS */}
+            <div className="space-y-6">
+              <div className="bg-paper border border-ink-200 rounded-bk-lg p-6 shadow-bk-sm space-y-6">
+                <h2 className="font-serif text-xl text-ink-900">Your loan</h2>
 
-            <button onClick={handleCalculate} className="btn-primary md:col-span-4 py-3 text-lg">
-              Calculate EMI
-            </button>
-          </div>
+                <CurrencySlider
+                  label="Loan amount"
+                  value={loanAmount}
+                  onChange={setLoanAmount}
+                  min={100_000}
+                  max={50_000_000}
+                  step={50_000}
+                  ticks={[500_000, 2_500_000, 10_000_000, 25_000_000]}
+                />
 
-          {results && (
-            <div className="card p-8">
-              <div className="grid md:grid-cols-3 gap-6 mb-6">
-                <Stat label="Monthly EMI" value={`₹${results.emi}`} accent />
-                <Stat label="Total Interest" value={`₹${results.interestPayable}`} />
-                <Stat label="Total Payable" value={`₹${results.total}`} />
+                <RateSlider
+                  label="Interest rate"
+                  value={interestRate}
+                  onChange={setInterestRate}
+                  min={0}
+                  max={20}
+                  step={0.1}
+                />
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+                      Tenure
+                    </span>
+                    <TogglePills
+                      value={tenureType}
+                      onChange={setTenureType}
+                      options={[
+                        { value: 'YEAR', label: 'Years' },
+                        { value: 'MONTH', label: 'Months' },
+                      ]}
+                    />
+                  </div>
+                  {tenureType === 'YEAR' ? (
+                    <TenureChips value={tenureYears} onChange={setTenureYears} />
+                  ) : (
+                    <input
+                      type="number"
+                      value={tenureYears}
+                      min={1}
+                      max={600}
+                      onChange={(e) => setTenureYears(Number(e.target.value) || 1)}
+                      className="w-32 px-3 py-2 bg-paper border border-ink-200 rounded-bk-md font-data tabular-nums text-ink-900 focus:outline-none focus:border-forest-400 focus:ring-2 focus:ring-forest-400/20"
+                    />
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-3 mb-6">
-                <button
-                  onClick={() => setShowSchedule((v) => !v)}
-                  className="btn-secondary py-2 px-4"
-                >
-                  {showSchedule ? 'Hide' : 'View'} Amortization Schedule (
-                  {results.amortisationResponse.length} months)
-                </button>
-                <button onClick={handleSave} disabled={saving} className="btn-primary py-2 px-4">
-                  {saving ? 'Saving...' : 'Save Result'}
-                </button>
-              </div>
-
-              {showSchedule && (
-                <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 text-gray-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left">#</th>
-                        <th className="px-3 py-2 text-left">Date</th>
-                        <th className="px-3 py-2 text-right">Opening</th>
-                        <th className="px-3 py-2 text-right">Interest</th>
-                        <th className="px-3 py-2 text-right">Principal</th>
-                        <th className="px-3 py-2 text-right">Closing</th>
-                        <th className="px-3 py-2 text-right">% Paid</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.amortisationResponse.map((row) => (
-                        <tr key={row.monthNumber} className="border-t border-gray-100">
-                          <td className="px-3 py-2">{row.monthNumber}</td>
-                          <td className="px-3 py-2">{row.date}</td>
-                          <td className="px-3 py-2 text-right">₹{row.openingBalance}</td>
-                          <td className="px-3 py-2 text-right">₹{row.interest}</td>
-                          <td className="px-3 py-2 text-right">₹{row.principal}</td>
-                          <td className="px-3 py-2 text-right">₹{row.closingBalance}</td>
-                          <td className="px-3 py-2 text-right">{row.loanPaid}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {results && (
+                <div className="bg-paper border border-ink-200 rounded-bk-lg p-6 shadow-bk-sm">
+                  <Donut
+                    segments={[
+                      { label: 'Principal', value: principal, color: '#0B3D2E' },
+                      { label: 'Interest', value: totalInterest, color: '#9DD4BB' },
+                    ]}
+                    size={220}
+                    thickness={0.32}
+                    centerLabel={`₹${formatINR(parseFloat(results.total))}`}
+                    centerSubLabel="total payable"
+                  />
                 </div>
               )}
+            </div>
+
+            {/* RESULTS */}
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-3">
+                <Stat
+                  label="Monthly EMI"
+                  value={results ? `₹${formatINR(parseFloat(results.emi))}` : '—'}
+                  tone="good"
+                />
+                <Stat
+                  label="Total interest"
+                  value={results ? `₹${formatINR(totalInterest)}` : '—'}
+                />
+                <Stat
+                  label="Total payable"
+                  value={results ? `₹${formatINR(parseFloat(results.total))}` : '—'}
+                />
+              </div>
+
+              {results && (
+                <div className="bg-paper border border-ink-200 rounded-bk-lg p-6 shadow-bk-sm">
+                  <AmortizationArea rows={results.amortisationResponse} />
+                </div>
+              )}
+
+              {results && (
+                <button
+                  onClick={() => setShowSchedule((v) => !v)}
+                  className="text-sm font-semibold text-forest-700 hover:text-forest-500"
+                >
+                  {showSchedule ? 'Hide' : 'View'} amortization schedule (
+                  {results.amortisationResponse.length} months)
+                </button>
+              )}
+
+              <button
+                onClick={handleSave}
+                disabled={saving || !results}
+                className="w-full py-3 px-4 rounded-bk-md bg-forest-700 hover:bg-forest-500 text-paper font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Result'}
+              </button>
+            </div>
+          </div>
+
+          {results && showSchedule && (
+            <div className="mt-8 bg-paper border border-ink-200 rounded-bk-lg shadow-bk-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-ink-100 text-ink-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">Date</th>
+                      <th className="px-3 py-2 text-right">Opening</th>
+                      <th className="px-3 py-2 text-right">Interest</th>
+                      <th className="px-3 py-2 text-right">Principal</th>
+                      <th className="px-3 py-2 text-right">Closing</th>
+                      <th className="px-3 py-2 text-right">% Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-data tabular-nums text-ink-900">
+                    {results.amortisationResponse.map((row) => (
+                      <tr key={row.monthNumber} className="border-t border-ink-100">
+                        <td className="px-3 py-2">{row.monthNumber}</td>
+                        <td className="px-3 py-2">{row.date}</td>
+                        <td className="px-3 py-2 text-right">₹{formatINR(parseFloat(row.openingBalance))}</td>
+                        <td className="px-3 py-2 text-right">₹{formatINR(parseFloat(row.interest))}</td>
+                        <td className="px-3 py-2 text-right">₹{formatINR(parseFloat(row.principal))}</td>
+                        <td className="px-3 py-2 text-right">₹{formatINR(parseFloat(row.closingBalance))}</td>
+                        <td className="px-3 py-2 text-right">{row.loanPaid}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </PaywallGate>
@@ -224,13 +256,23 @@ export default function EmiCalculatorPage() {
   )
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  tone?: 'good' | 'bad' | 'neutral'
+}) {
+  const toneColor =
+    tone === 'good' ? 'text-forest-700' : tone === 'bad' ? 'text-red-700' : 'text-ink-900'
   return (
-    <div className={`rounded-lg p-4 ${accent ? 'bg-blue-50' : 'bg-gray-50'}`}>
-      <p className="text-sm text-gray-600">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-blue-700' : 'text-gray-900'}`}>
-        {value}
+    <div className="bg-paper border border-ink-200 rounded-bk-md p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-400 mb-1">
+        {label}
       </p>
+      <p className={`font-data tabular-nums text-xl font-medium ${toneColor}`}>{value}</p>
     </div>
   )
 }

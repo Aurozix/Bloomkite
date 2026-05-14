@@ -6,15 +6,21 @@ import {
   ArrowsRightLeftIcon,
   AcademicCapIcon,
 } from '@heroicons/react/24/outline'
+import { PageShell } from './components/PageShell'
+import { PageHeader } from './components/PageHeader'
 
 // Bloomkite home page — brand voice per docs/branding/brand.md §4 (Authoritative,
 // Plain, Considered). Anti-hype. The headline is the recommended tagline from
-// the brand file (§1, tagline B).
+// the brand file (§1, tagline B). Layout is the reference implementation for
+// docs/layout/standard.md — every section uses PageShell, PageHeader covers the
+// section headers, and only the hero h1 and closing-CTA h2 remain inline
+// because their typography is intentionally off the standard scale (Display
+// for the hero opener, smaller for the closing taper).
 export default function Home() {
   return (
     <div className="w-full">
       {/* Hero — Forest substrate, Paper text, single saffron point of accent */}
-      <section className="relative min-h-[88vh] flex items-center justify-center px-4 overflow-hidden bg-forest-700 text-paper">
+      <section className="relative min-h-[88vh] flex items-center justify-center overflow-hidden bg-forest-700 text-paper">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -22,7 +28,7 @@ export default function Home() {
               'radial-gradient(circle at 30% 20%, rgba(29,158,117,0.18) 0%, transparent 55%), linear-gradient(135deg, #0B3D2E 0%, #0F6E56 60%, #062520 100%)',
           }}
         />
-        <div className="max-w-4xl mx-auto text-center py-24">
+        <PageShell bucket="detail" surface="marketing" className="text-center">
           <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-saffron-300 mb-8">
             <span className="h-1 w-1 rounded-full bg-saffron-400" />
             Verified advisor marketplace
@@ -50,20 +56,18 @@ export default function Home() {
               Browse verified advisors
             </a>
           </div>
-        </div>
+        </PageShell>
       </section>
 
       {/* The promise — three principles from the brand file */}
-      <section id="features" className="py-24 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-400 mb-3">
-              What you can expect
-            </p>
-            <h2 className="font-serif text-4xl md:text-5xl font-medium text-forest-700 leading-tight tracking-tight">
-              Verified advisors. Honest choices.
-            </h2>
-          </div>
+      <section id="features">
+        <PageShell bucket="detail" surface="marketing">
+          <PageHeader
+            level="h2"
+            align="center"
+            eyebrow="What you can expect"
+            title="Verified advisors. Honest choices."
+          />
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <PromiseCard icon={ShieldCheckIcon} title="Credentials verified">
@@ -83,26 +87,21 @@ export default function Home() {
               before you talk.
             </PromiseCard>
           </div>
-        </div>
+        </PageShell>
       </section>
 
       {/* Pricing — Forest pricing column, single saffron point on the premium tier */}
-      <section className="py-24 px-4 bg-paper">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-400 mb-3">
-              Pricing
-            </p>
-            <h2 className="font-serif text-4xl md:text-5xl font-medium text-forest-700 leading-tight tracking-tight mb-3">
-              Pay only when you need more.
-            </h2>
-            <p className="text-ink-600">
-              The basics are free. Pay only if you want every calculator and direct
-              advisor consultations.
-            </p>
-          </div>
+      <section>
+        <PageShell bucket="detail" surface="marketing">
+          <PageHeader
+            level="h2"
+            align="center"
+            eyebrow="Pricing"
+            title="Pay only when you need more."
+            subtitle="The basics are free. Pay only if you want every calculator and direct advisor consultations."
+          />
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6">
             <PlanCard
               name="Free"
               price="₹0"
@@ -144,12 +143,14 @@ export default function Home() {
               variant="premium"
             />
           </div>
-        </div>
+        </PageShell>
       </section>
 
-      {/* CTA — closing, Forest. */}
-      <section className="py-20 px-4 bg-forest-700 text-paper">
-        <div className="max-w-3xl mx-auto text-center">
+      {/* CTA — closing, Forest. Title stays inline because the closing taper is
+          intentionally smaller than the section-header scale; PageHeader would
+          flatten the page's vertical rhythm. */}
+      <section className="bg-forest-700 text-paper">
+        <PageShell bucket="reading" surface="marketing" className="text-center">
           <h2 className="font-serif text-3xl md:text-4xl font-medium leading-tight tracking-tight mb-4">
             Ready to choose an advisor on merit?
           </h2>
@@ -163,7 +164,7 @@ export default function Home() {
           >
             Browse verified advisors
           </a>
-        </div>
+        </PageShell>
       </section>
     </div>
   )
