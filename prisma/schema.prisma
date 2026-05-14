@@ -60,6 +60,8 @@ model User {
   forumAnswerVotes    ForumAnswerVote[]
   invoices            Invoice[]
   subscriptions       Subscription[]
+  planSharesReceived  PlanShare[]          @relation("PlanSharesReceived")
+  planCommentsAuthored PlanComment[]       @relation("PlanCommentsAuthored")
   adminAuditActions   AdminAudit[]         @relation("AdminAuditActor")
   disabler            User?                @relation("UserDisabler", fields: [disabledBy], references: [id], onDelete: NoAction)
   disabledUsers       User[]               @relation("UserDisabler")
@@ -648,12 +650,81 @@ model FinancialPlan {
   createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shares PlanShare[]
 
   @@index([calculatorType], map: "idx_financial_plans_calculator_type")
   @@index([isDraft], map: "idx_financial_plans_is_draft")
   @@index([userId], map: "idx_financial_plans_user_id")
   @@map("financial_plans")
+}
+
+// ============================================================================
+// Plan sharing (BRD §3.3, §5.3, §11.2 — the platform's headline differentiator)
+// ============================================================================
+//
+// An investor shares one of their saved FinancialPlans with up to 5 advisors
+// (BRD §8.1 cap, enforced in app code by counting active shares). Each share
+// is a (plan, advisor) row carrying a permission grant (VIEW or COMMENT) and
+// a workflow status (NEW → VIEWED → REVIEWED, or REVOKED).
+//
+// BRD §8.5 — advisors must NOT see other advisors' feedback. The data model
+// makes this easy: comments are scoped to a single PlanShare row, and a
+// PlanShare row is unique to one advisor. Routes scoping comments by
+// share-id (where share.advisorId = me) cannot leak across advisors.
+//
+// (planId, advisorId) is unique — re-sharing after revocation flips the
+// existing row's status back to NEW rather than creating a new row.
+
+/// One investor → one advisor share of a single FinancialPlan.
+model PlanShare {
+  id         String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  planId     String    @map("plan_id") @db.Uuid
+  advisorId  String    @map("advisor_id") @db.Uuid
+  /// 'VIEW' (read-only) or 'COMMENT' (read + write feedback).
+  permission String    @default("COMMENT") @db.VarChar(20)
+  /// 'NEW' (advisor hasn't opened it), 'VIEWED' (advisor opened it),
+  /// 'REVIEWED' (advisor has commented at least once), 'REVOKED' (investor
+  /// pulled it back). REVOKED hides the plan from the advisor's inbox and
+  /// blocks new comments; existing comment rows are kept for audit.
+  status     String    @default("NEW") @db.VarChar(20)
+  /// Optional context the investor adds at share-time.
+  message    String?
+  viewedAt   DateTime? @map("viewed_at") @db.Timestamp(6)
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamp(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  plan     FinancialPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  advisor  User          @relation("PlanSharesReceived", fields: [advisorId], references: [id], onDelete: Cascade)
+  comments PlanComment[]
+
+  @@unique([planId, advisorId])
+  @@index([advisorId, status], map: "idx_plan_shares_advisor_status")
+  @@index([planId, status], map: "idx_plan_shares_plan_status")
+  @@map("plan_shares")
+}
+
+/// Advisor's feedback on a shared plan. One row per advisor comment;
+/// many-per-share. authorId is implied (= share.advisorId) but stored
+/// explicitly so any future investor-reply support is a one-line schema
+/// change rather than a migration. For now, the advisor route is the only
+/// writer and asserts authorId === share.advisorId.
+model PlanComment {
+  id        String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  shareId   String   @map("share_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  share  PlanShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  author User      @relation("PlanCommentsAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([shareId, createdAt], map: "idx_plan_comments_share_created")
+  @@index([authorId], map: "idx_plan_comments_author")
+  @@map("plan_comments")
 }
 
 // ============================================================================

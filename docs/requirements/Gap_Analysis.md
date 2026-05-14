@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§2 Auth and §3 Profiles both fully green; master-data foundation for §9 landed)
+**Last Updated**: 2026-05-13 (§4 Plan sharing landed end-to-end — schema, investor share UI, advisor inbox + comments, compare-feedback view; only the advisor-notification row left, blocked by §10)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -88,23 +88,23 @@ This is a living document. Whenever work ships that moves a row's status:
 
 ---
 
-## 4. Plan sharing — largely missing (BRD's headline differentiator)
+## 4. Plan sharing — largely landed (BRD's headline differentiator)
 
 BRD §3.3, §5.3, §11.2 position plan-sharing as the platform's key competitive advantage.
 
 | Capability | Status |
 |---|---|
 | Save plan (`financial_plans` table) | ✅ |
-| Choose multiple advisors to share with | ❌ |
-| Sharing permissions (view-only / comment) | ❌ |
-| Advisor receives notification | ❌ |
-| Advisor views plan with full data | ❌ |
-| Advisor adds comments / recommendations | ❌ |
-| Investor sees multiple advisor responses | ❌ |
-| Advisor cannot see others' feedback (BRD §8.5) | ❌ |
-| Sharing cap of 5 advisors (BRD §8.1) | ❌ |
+| Choose multiple advisors to share with | ✅ |
+| Sharing permissions (view-only / comment) | ✅ |
+| Advisor receives notification | ❌ — see §10 (notifications absent platform-wide) |
+| Advisor views plan with full data | ✅ |
+| Advisor adds comments / recommendations | ✅ |
+| Investor sees multiple advisor responses | ✅ |
+| Advisor cannot see others' feedback (BRD §8.5) | ✅ — comments scoped per-PlanShare row, no cross-advisor query path |
+| Sharing cap of 5 advisors (BRD §8.1) | ✅ — enforced in [share route](../../app/api/financial-plans/[id]/share/route.ts) |
 
-No `plan_shares`, `plan_comments`, or `plan_recipients` tables exist. Blocks UC-1, UC-3, UC-4, UC-5, UC-7.
+`plan_shares` + `plan_comments` tables landed 2026-05-13. Unlocks UC-1, UC-3, UC-4, UC-5, UC-7 from a data + workflow standpoint; UC-7 ("compare advisor feedback") has its own page at [/plans/[id]/feedback](../../app/plans/[id]/feedback/page.tsx). Notifying advisors of incoming shares is the only remaining hole — blocked by §10 (no notification system exists yet).
 
 ---
 
@@ -287,6 +287,15 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §4 Plan sharing — 8 of 9 rows ❌ → ✅ (BRD §3.3, §5.3, §8.1, §8.5, UC-7). The platform's headline differentiator is now live end-to-end:
+  - **Schema**: new `plan_shares` (one row per investor↔advisor for a plan, unique on `(plan_id, advisor_id)`, status NEW/VIEWED/REVIEWED/REVOKED, permission VIEW/COMMENT) and `plan_comments` (per-share thread) tables. Migration `20260514020000_plan_sharing` + Prisma drift fix-up `20260514020821_plan_sharing` (FK `ON UPDATE` rewrite, same pattern as `bk_refactor_1`). Constants live in [`lib/plan-sharing.ts`](../../lib/plan-sharing.ts) so the cap and status set can't drift between routes.
+  - **BRD §8.1 cap (max 5 advisors)** enforced in [POST /api/financial-plans/:id/share](../../app/api/financial-plans/[id]/share/route.ts) by combining current active shares with the new request and rejecting with 409 if it would exceed 5. Re-sharing after revoke flips the existing row's status back to NEW (upsert) rather than inserting a duplicate.
+  - **BRD §8.5 (no cross-advisor visibility)** is structural, not query-time: `plan_comments` are FK'd to a single `plan_shares` row, and a share row is unique to one advisor. Routes scope by `share.advisorId === me.id`, so an advisor literally cannot fetch another advisor's comments — no "where authorId in" query path exists.
+  - **Investor share UI**: [/plans](../../app/plans/page.tsx) lists saved plans with active-share badges and opens an inline ShareDialog modal that lets the investor pick advisors from the catalog, set permission (VIEW/COMMENT), add an optional message, and revoke / re-permission existing shares. Cap-aware: greys out the picker once 5 active slots are full.
+  - **Advisor inbox + plan view**: [/advisor/inbox](../../app/advisor/inbox/page.tsx) lists shared plans with status pills (NEW/VIEWED/REVIEWED) and includes the investor's risk profile + city for context. Opening a single share at [/advisor/inbox/:shareId](../../app/advisor/inbox/[shareId]/page.tsx) flips status NEW→VIEWED on first view, renders the plan inputs/results, and exposes a comment composer (only when permission='COMMENT' — VIEW-only shares show an explainer card instead). First comment promotes the share to REVIEWED.
+  - **Investor compare-feedback view (UC-7)**: [/plans/:id/feedback](../../app/plans/[id]/feedback/page.tsx) returns one card per advisor with status indicator + their full comment thread. Side-by-side grid (responsive 1/2/3 cols). Revoked shares appear greyed out — investors who pulled a share back may still want to see what was said.
+  - **API surface**: 7 new routes — investor: GET [list](../../app/api/financial-plans/route.ts), POST [share](../../app/api/financial-plans/[id]/share/route.ts), GET [shares](../../app/api/financial-plans/[id]/shares/route.ts), PATCH/DELETE [single share](../../app/api/financial-plans/[id]/shares/[shareId]/route.ts), GET [feedback compare](../../app/api/financial-plans/[id]/feedback/route.ts); advisor: GET [inbox](../../app/api/advisor/shared-plans/route.ts), GET [single share](../../app/api/advisor/shared-plans/[shareId]/route.ts), POST [comment](../../app/api/advisor/shared-plans/[shareId]/comments/route.ts).
+  - **Open follow-up**: notify advisor on incoming share (last ❌ row) — blocked by §10 (no notifications subsystem). When that lands, hook the in-app notification + email send into the share-route success path.
 - **2026-05-13** — §3 Investor financial accounts (❌ → ✅, BRD §3.1 step 5). New `investor_financial_accounts` table M:N to `master_data_account_types` with optional `institution_name`. Migration `20260513240500_investor_financial_accounts`. **No balance/amount fields** — Bloomkite is an advisor-discovery platform, not a portfolio tracker, and BRD §8.5 (data minimisation) forbids capturing data we don't need. New [GET/PUT /api/investors/financial-accounts](../../app/api/investors/financial-accounts/route.ts) endpoint — full-replace PUT semantics; the same `account_type` can appear multiple times with different institution names (one HDFC savings + one ICICI savings). UI: a new "Financial Accounts" section on [/profile/investor](../../app/profile/investor/page.tsx) with add/remove rows, each row picking an account type from the master-data dropdown + optional institution-name text input. **§3 Profiles is now fully green** — both investor and advisor rows.
 - **2026-05-13** — §3 Investor investment interests (❌ → ✅, BRD §3.1 step 4). New `investor_investment_interests` join table M:N to `master_data_investment_categories`. Migration `20260513240400_investor_interests`. New [GET/PUT /api/investors/interests](../../app/api/investors/interests/route.ts) endpoint with full-replace semantics + dedup. Multi-select checkbox card on [/profile/investor](../../app/profile/investor/page.tsx) — no ranking (every interest equal weight per spec).
 - **2026-05-13** — §3 Advisor Products / Services / Brands + priority ranking (❌ → ✅ both rows, BRD §3.2 steps 5+6). Three new join tables (`advisor_products`, `advisor_services`, `advisor_brands`) referencing master_data; `priority` Int on products + services only (BRD §3.2 step 6 ranks those two, not brands). Migration `20260513240300_advisor_psb`. New endpoints: [GET/PUT /api/advisors/declarations](../../app/api/advisors/declarations/route.ts) (full-replace semantics — payload is canonical state, omit a row to remove it), [GET /api/master-data/:domain](../../app/api/master-data/[domain]/route.ts) for the picker dropdowns. Profile UI has a new "Products, Services & Brands" card with ordered-list ↑/↓ controls for the two ranked dimensions. Legacy `advisor_expertise` free-text-tag table left intact for now — cleanup commit to drop pending after data check.
