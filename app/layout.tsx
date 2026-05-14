@@ -8,6 +8,7 @@ import { Navbar } from './components/Navbar'
 import { Footer } from './components/Footer'
 import { CookieConsent } from './components/CookieConsent'
 import { Providers } from './providers'
+import { AuthModal } from './components/AuthModal'
 
 // Bloomkite Brand v1.0 typography — see docs/branding/brand.md §6.
 // Fraunces handles display/editorial, Inter handles body/UI, JetBrains Mono
@@ -99,6 +100,7 @@ export default function RootLayout({
               </div>
               <CookieConsent />
               <ToastContainer />
+              <AuthModal />
             </ToastProvider>
           </ColorSchemeProvider>
         </Providers>

@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     const { signOut } = await import('next-auth/react')
-    await signOut({ callbackUrl: '/auth/signin' })
+    await signOut({ callbackUrl: '/' })
   }
 
   // Role switching is handled by the Navbar's user menu. Keep this as a stub

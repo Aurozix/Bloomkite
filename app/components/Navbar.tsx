@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { ArrowRightOnRectangleIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import { Logo } from './Logo'
+import { useAuthModal } from './auth-modal-context'
 
 // Routes where the Navbar should NOT render. Auth screens get their own layout.
 const HIDDEN_ON: ReadonlyArray<string> = [
@@ -43,6 +44,7 @@ export function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session, update } = useSession()
+  const { openModal } = useAuthModal()
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
@@ -153,12 +155,12 @@ export function Navbar() {
               )}
             </div>
           ) : (
-            <a
-              href="/auth/signin"
+            <button
+              onClick={() => openModal('signin')}
               className="text-sm font-semibold text-paper bg-forest-400 hover:bg-forest-500 px-4 py-2 rounded-bk-md transition-colors"
             >
               Sign in
-            </a>
+            </button>
           )}
         </div>
       </div>
