@@ -11,6 +11,12 @@ interface User {
   full_name?: string
 }
 
+interface TaggedAdvisor {
+  id: string
+  name: string
+  company: string | null
+}
+
 interface Question {
   id: string
   title: string
@@ -20,6 +26,7 @@ interface Question {
   created_at: string
   updated_at: string
   author: User
+  tagged_advisors?: TaggedAdvisor[]
 }
 
 interface Answer {
@@ -254,6 +261,28 @@ export default function QuestionPage() {
           <div className="prose prose-sm max-w-none text-gray-700">
             {question.content}
           </div>
+
+          {question.tagged_advisors && question.tagged_advisors.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                Tagged advisors
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {question.tagged_advisors.map((t) => (
+                  <a
+                    key={t.id}
+                    href={`/advisors/${t.id}`}
+                    className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100"
+                  >
+                    {t.name}
+                    {t.company && (
+                      <span className="ml-1 text-xs text-blue-500 font-normal">· {t.company}</span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Answers */}

@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { CheckBadgeIcon, UserIcon } from '@heroicons/react/24/outline'
+import { StarIcon } from '@heroicons/react/24/outline'
+import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { useToast } from '@/app/components/toast-context'
+import { RATING_MAX } from '@/lib/advisor-engagement'
 
 interface Credential {
   id: string
@@ -31,6 +34,23 @@ interface Advisor {
   is_following?: boolean
 }
 
+interface ReviewRow {
+  id: string
+  stars: number
+  reviewBody: string | null
+  createdAt: string
+  updatedAt: string
+  investorId: string
+  investorName: string
+  investorCity: string | null
+}
+
+interface RatingPayload {
+  summary: { ratingCount: number; ratingAverage: number | null }
+  ratings: ReviewRow[]
+  myRating: { id: string; stars: number; reviewBody: string | null; updatedAt: string } | null
+}
+
 export default function AdvisorProfile() {
   const router = useRouter()
   const params = useParams()
@@ -42,17 +62,35 @@ export default function AdvisorProfile() {
   const [following, setFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
 
+  const [ratings, setRatings] = useState<RatingPayload | null>(null)
+  const [draftStars, setDraftStars] = useState<number>(0)
+  const [draftReview, setDraftReview] = useState('')
+  const [submittingRating, setSubmittingRating] = useState(false)
+
   const advisorId = params.id as string
+
+  const refreshRatings = async () => {
+    const r = await fetch(`/api/advisors/${advisorId}/ratings`)
+    if (r.ok) {
+      const json = (await r.json()) as RatingPayload
+      setRatings(json)
+      if (json.myRating) {
+        setDraftStars(json.myRating.stars)
+        setDraftReview(json.myRating.reviewBody ?? '')
+      } else {
+        setDraftStars(0)
+        setDraftReview('')
+      }
+    }
+  }
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch user session
         const sessionResponse = await fetch('/api/auth/session')
         const sessionData = await sessionResponse.json()
         setUser(sessionData.user || null)
 
-        // Fetch advisor profile
         const advisorResponse = await fetch(`/api/advisors/${advisorId}`)
         if (!advisorResponse.ok) {
           addToast('Advisor not found', 'error')
@@ -63,6 +101,8 @@ export default function AdvisorProfile() {
         const advisorData = await advisorResponse.json()
         setAdvisor(advisorData.data)
         setFollowing(advisorData.data.is_following || false)
+
+        await refreshRatings()
       } catch (error) {
         console.error('Error fetching data:', error)
         addToast('Error loading advisor profile', 'error')
@@ -72,7 +112,56 @@ export default function AdvisorProfile() {
     }
 
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advisorId, router, addToast])
+
+  const submitRating = async () => {
+    if (!user) {
+      addToast('Sign in to leave a review', 'info')
+      router.push('/auth/signin')
+      return
+    }
+    if (draftStars < 1) {
+      addToast('Pick a star rating first', 'error')
+      return
+    }
+    setSubmittingRating(true)
+    try {
+      const r = await fetch(`/api/advisors/${advisorId}/ratings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stars: draftStars,
+          reviewBody: draftReview.trim() || undefined,
+        }),
+      })
+      const json = await r.json()
+      if (!r.ok) {
+        addToast(json.error || 'Failed to submit', 'error')
+        return
+      }
+      addToast(ratings?.myRating ? 'Review updated' : 'Review submitted', 'success')
+      await refreshRatings()
+    } finally {
+      setSubmittingRating(false)
+    }
+  }
+
+  const deleteRating = async () => {
+    if (!ratings?.myRating) return
+    setSubmittingRating(true)
+    try {
+      const r = await fetch(`/api/advisors/${advisorId}/ratings`, { method: 'DELETE' })
+      if (!r.ok) {
+        addToast('Failed to remove', 'error')
+        return
+      }
+      addToast('Review removed', 'success')
+      await refreshRatings()
+    } finally {
+      setSubmittingRating(false)
+    }
+  }
 
   const handleFollow = async () => {
     if (!user) {
@@ -227,7 +316,7 @@ export default function AdvisorProfile() {
 
         {/* Credentials */}
         {advisor.credentials.length > 0 && (
-          <div className="card p-8">
+          <div className="card p-8 mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Credentials & Certifications</h2>
             <div className="space-y-4">
               {advisor.credentials.map((cred) => (
@@ -252,7 +341,146 @@ export default function AdvisorProfile() {
             </div>
           </div>
         )}
+
+        {/* Ratings & Reviews — BRD §7.1 */}
+        <div className="card p-8">
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Ratings & Reviews</h2>
+            {ratings && ratings.summary.ratingCount > 0 && (
+              <div className="flex items-center gap-2">
+                <StarSolid className="h-6 w-6 text-amber-500" />
+                <span className="text-2xl font-bold text-gray-900">
+                  {ratings.summary.ratingAverage?.toFixed(1)}
+                </span>
+                <span className="text-sm text-gray-500">
+                  ({ratings.summary.ratingCount} review{ratings.summary.ratingCount === 1 ? '' : 's'})
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Write/edit your own review (gated on signed-in + not-self) */}
+          {user && user.id !== advisor.id && (
+            <div className="mb-6 p-5 rounded-lg border border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-3">
+                {ratings?.myRating ? 'Your review' : 'Leave a review'}
+              </h3>
+              <StarPicker value={draftStars} onChange={setDraftStars} />
+              <textarea
+                value={draftReview}
+                onChange={(e) => setDraftReview(e.target.value)}
+                rows={3}
+                maxLength={4000}
+                placeholder="What was your experience like? (optional)"
+                className="input-modern w-full mt-3 text-sm"
+              />
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={submitRating}
+                  disabled={submittingRating || draftStars < 1}
+                  className="btn-primary px-5 py-2 text-sm disabled:opacity-50"
+                >
+                  {submittingRating
+                    ? 'Saving…'
+                    : ratings?.myRating
+                      ? 'Update review'
+                      : 'Submit review'}
+                </button>
+                {ratings?.myRating && (
+                  <button
+                    onClick={deleteRating}
+                    disabled={submittingRating}
+                    className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded font-semibold"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Reviews list */}
+          {ratings && ratings.ratings.length > 0 ? (
+            <div className="space-y-4">
+              {ratings.ratings.map((r) => (
+                <div key={r.id} className="border-b border-gray-100 last:border-0 pb-4 last:pb-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <StarsRow stars={r.stars} />
+                    <span className="text-sm font-semibold text-gray-900">{r.investorName}</span>
+                    {r.investorCity && (
+                      <span className="text-xs text-gray-500">· {r.investorCity}</span>
+                    )}
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {r.reviewBody && (
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.reviewBody}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 italic">No reviews yet.</p>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function StarsRow({ stars }: { stars: number }) {
+  return (
+    <div className="flex">
+      {Array.from({ length: RATING_MAX }, (_, i) =>
+        i < stars ? (
+          <StarSolid key={i} className="h-4 w-4 text-amber-500" />
+        ) : (
+          <StarIcon key={i} className="h-4 w-4 text-gray-300" />
+        ),
+      )}
+    </div>
+  )
+}
+
+function StarPicker({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (n: number) => void
+}) {
+  const [hover, setHover] = useState(0)
+  const display = hover || value
+  return (
+    <div
+      className="flex gap-1"
+      onMouseLeave={() => setHover(0)}
+      role="radiogroup"
+      aria-label="Star rating"
+    >
+      {Array.from({ length: RATING_MAX }, (_, i) => {
+        const n = i + 1
+        const filled = n <= display
+        return (
+          <button
+            type="button"
+            key={n}
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${n} star${n === 1 ? '' : 's'}`}
+            onClick={() => onChange(n)}
+            onMouseEnter={() => setHover(n)}
+            className="p-1 hover:scale-110 transition-transform"
+          >
+            {filled ? (
+              <StarSolid className="h-7 w-7 text-amber-500" />
+            ) : (
+              <StarIcon className="h-7 w-7 text-gray-300" />
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

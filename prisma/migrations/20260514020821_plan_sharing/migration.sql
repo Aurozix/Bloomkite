@@ -1,11 +1,3 @@
--- Prisma drift fix-up auto-generated alongside 20260514020000_plan_sharing.
--- The hand-written prior migration created FKs with `ON UPDATE NO ACTION`
--- (matching the convention of the original 0_init baseline). Modern Prisma
--- defaults to `ON UPDATE CASCADE` for relations declared `onDelete: Cascade`,
--- and rewrites the FKs on `migrate dev` to keep the DB in lock-step with
--- the schema. Same pattern as 20260514013319_bk_refactor_1, which did the
--- same FK rewrite for the master_data + investor_* join tables.
-
 -- DropForeignKey
 ALTER TABLE "plan_comments" DROP CONSTRAINT "plan_comments_author_id_fkey";
 

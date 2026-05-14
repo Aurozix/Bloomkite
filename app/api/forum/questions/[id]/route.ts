@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
 function serializeQuestion(q: any) {
-  const { author, ...rest } = q
+  const { author, taggedAdvisors, ...rest } = q
   return {
     id: rest.id,
     title: rest.title,
@@ -15,6 +15,16 @@ function serializeQuestion(q: any) {
     author: author
       ? { id: author.id, email: author.email, full_name: author.name }
       : null,
+    tagged_advisors: Array.isArray(taggedAdvisors)
+      ? taggedAdvisors.map((t: any) => ({
+          id: t.advisorId,
+          name:
+            t.advisor?.advisorProfile?.displayName ||
+            t.advisor?.name ||
+            t.advisor?.email,
+          company: t.advisor?.advisorProfile?.companyName ?? null,
+        }))
+      : [],
   }
 }
 
@@ -42,6 +52,20 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       where: { id: questionId },
       include: {
         author: { select: { id: true, email: true, name: true } },
+        taggedAdvisors: {
+          include: {
+            advisor: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                advisorProfile: {
+                  select: { displayName: true, companyName: true },
+                },
+              },
+            },
+          },
+        },
       },
     })
 

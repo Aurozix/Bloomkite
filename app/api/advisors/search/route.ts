@@ -2,20 +2,53 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/db'
 
+// Faceted advisor search (BRD §3.4 / §5).
+//
+// Query params:
+//   q                  — full-text contains over name/company/bio (case-insens)
+//   city               — exact match (case-insensitive)
+//   specialization     — substring match on advisor_expertise.specialization
+//   product            — repeatable; product UUID. Matches advisors whose
+//                        advisor_products carries the row.
+//   service            — repeatable; service UUID.
+//   brand              — repeatable; brand UUID.
+//   sort               — 'rating' | 'followers' | 'newest' (default newest).
+//                        rating uses (ratingAverage DESC NULLS LAST,
+//                        ratingCount DESC) so unrated advisors aren't ahead
+//                        of mid-rated ones.
+//   page, limit        — pagination
+//
+// Multi-value facets are AND across dimensions, OR within one dimension
+// (e.g. product=A&product=B → "offers A OR B"; product=A&service=X →
+// "offers A AND service X"). This matches the affordance the sidebar UI
+// gives the user: ticking two products in one panel widens the result;
+// ticking across panels narrows it.
+
+const collectMulti = (sp: URLSearchParams, key: string): string[] => {
+  const values = sp.getAll(key)
+  // Allow comma-separated as a fallback shape for clients that prefer it.
+  return Array.from(
+    new Set(
+      values.flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean),
+    ),
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const q = searchParams.get('q')?.toLowerCase()
-    const city = searchParams.get('city')?.toLowerCase()
-    const specialization = searchParams.get('specialization')?.toLowerCase()
-    const sort = searchParams.get('sort') || 'newest' // 'followers' | 'newest'
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const q = searchParams.get('q')?.toLowerCase().trim()
+    const city = searchParams.get('city')?.toLowerCase().trim()
+    const specialization = searchParams.get('specialization')?.toLowerCase().trim()
+    const productIds = collectMulti(searchParams, 'product')
+    const serviceIds = collectMulti(searchParams, 'service')
+    const brandIds = collectMulti(searchParams, 'brand')
+    const sort = searchParams.get('sort') || 'newest'
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')))
     const offset = (page - 1) * limit
 
-    // Base query against advisor_profiles. follower_count comes from the
-    // denormalized column maintained by the trigger in migration 005.
-    const where: any = {
+    const where: Record<string, unknown> = {
       isVerified: true,
       workflowStatus: 'approved',
     }
@@ -29,29 +62,57 @@ export async function GET(request: NextRequest) {
     }
 
     if (city) {
-      where.city = city
+      where.city = { equals: city, mode: 'insensitive' }
     }
 
-    // Both sort branches use a deterministic created_at tiebreaker so equal
-    // counts produce a stable order across pages.
-    const orderBy: any =
-      sort === 'followers'
-        ? [{ followerCount: 'desc' }, { createdAt: 'desc' }]
-        : [{ createdAt: 'desc' }]
+    // Facet AND-across-dimensions, OR-within-dimension. Each non-empty facet
+    // becomes a `user: { advisor<X>s: { some: { <Y>Id: { in: [...] } } } }`
+    // — Prisma compiles to a correlated EXISTS subquery on the join table.
+    const userAnd: Array<Record<string, unknown>> = []
+    if (productIds.length > 0) {
+      userAnd.push({ advisorProducts: { some: { productId: { in: productIds } } } })
+    }
+    if (serviceIds.length > 0) {
+      userAnd.push({ advisorServices: { some: { serviceId: { in: serviceIds } } } })
+    }
+    if (brandIds.length > 0) {
+      userAnd.push({ advisorBrands: { some: { brandId: { in: brandIds } } } })
+    }
+    if (specialization) {
+      userAnd.push({
+        advisorExpertise: {
+          some: { specialization: { contains: specialization, mode: 'insensitive' } },
+        },
+      })
+    }
+    if (userAnd.length > 0) {
+      where.user = { AND: userAnd }
+    }
+
+    // Sort branches all carry a deterministic createdAt tiebreaker so equal
+    // primaries produce stable pagination.
+    const orderBy: Array<Record<string, unknown>> =
+      sort === 'rating'
+        ? [
+            { ratingAverage: { sort: 'desc', nulls: 'last' } },
+            { ratingCount: 'desc' },
+            { createdAt: 'desc' },
+          ]
+        : sort === 'followers'
+          ? [{ followerCount: 'desc' }, { createdAt: 'desc' }]
+          : [{ createdAt: 'desc' }]
 
     const [advisors, count] = await Promise.all([
       prisma.advisorProfile.findMany({
-        where,
-        orderBy,
+        where: where as never,
+        orderBy: orderBy as never,
         skip: offset,
         take: limit,
       }),
-      prisma.advisorProfile.count({ where }),
+      prisma.advisorProfile.count({ where: where as never }),
     ])
 
-    // Batch-fetch expertise rows for the visible advisors so the page can
-    // render their specialisation tags. One query per request, regardless of
-    // result-set size.
+    // Batch-fetch expertise for the visible advisors. One query.
     const userIds = advisors.map((a) => a.userId).filter(Boolean)
     const expertiseByUser = new Map<string, string[]>()
     if (userIds.length > 0) {
@@ -66,18 +127,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Specialization filter is post-fetch (the embedded query was the same).
-    // Acceptable at MVP volumes; revisit if advisor count gets large.
-    let filtered = advisors
-    if (specialization) {
-      filtered = filtered.filter((advisor) => {
-        const tags = expertiseByUser.get(advisor.userId) ?? []
-        return tags.some((t) => t.toLowerCase().includes(specialization))
-      })
-    }
-
-    // Map Prisma camelCase back to snake_case for API compatibility.
-    const formattedAdvisors = filtered.map((advisor) => ({
+    const formattedAdvisors = advisors.map((advisor) => ({
       id: advisor.id,
       user_id: advisor.userId,
       display_name: advisor.displayName,
@@ -102,6 +152,8 @@ export async function GET(request: NextRequest) {
       is_verified: advisor.isVerified,
       verified_at: advisor.verifiedAt,
       follower_count: advisor.followerCount ?? 0,
+      rating_count: advisor.ratingCount ?? 0,
+      rating_average: advisor.ratingAverage ? Number(advisor.ratingAverage) : null,
       created_at: advisor.createdAt,
       updated_at: advisor.updatedAt,
       expertise: expertiseByUser.get(advisor.userId) ?? [],
@@ -115,6 +167,17 @@ export async function GET(request: NextRequest) {
         limit,
         total: count || 0,
         total_pages: Math.ceil((count || 0) / limit),
+      },
+      facets: {
+        // Echo the applied facet selection so the UI can reconcile its state
+        // with the URL on first paint.
+        productIds,
+        serviceIds,
+        brandIds,
+        specialization: specialization || null,
+        city: city || null,
+        q: q || null,
+        sort,
       },
     })
   } catch (error) {

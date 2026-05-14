@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { InboxIcon } from '@heroicons/react/24/outline'
+import { InboxIcon, ChatBubbleLeftEllipsisIcon } from '@heroicons/react/24/outline'
 
 import { useToast } from '@/app/components/toast-context'
 import { PageShell } from '@/app/components/PageShell'
@@ -26,6 +26,18 @@ interface InboxRow {
   }
 }
 
+interface ForumTagRow {
+  questionId: string
+  taggedAt: string
+  title: string
+  contentPreview: string
+  status: string
+  answerCount: number
+  askerName: string
+  askerCity: string | null
+  askedAt: string
+}
+
 const STATUS_PILL: Record<string, string> = {
   NEW: 'bg-blue-100 text-blue-700',
   VIEWED: 'bg-amber-100 text-amber-700',
@@ -37,6 +49,7 @@ export default function AdvisorInboxPage() {
   const router = useRouter()
   const { addToast } = useToast()
   const [rows, setRows] = useState<InboxRow[]>([])
+  const [forumTags, setForumTags] = useState<ForumTagRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -48,13 +61,20 @@ export default function AdvisorInboxPage() {
           router.push('/auth/signin')
           return
         }
-        const resp = await fetch('/api/advisor/shared-plans')
-        if (!resp.ok) {
+        const [sharesResp, tagsResp] = await Promise.all([
+          fetch('/api/advisor/shared-plans'),
+          fetch('/api/advisor/forum-tags'),
+        ])
+        if (!sharesResp.ok) {
           addToast('Failed to load inbox', 'error')
           return
         }
-        const data = await resp.json()
-        setRows(data.shares ?? [])
+        const sharesData = await sharesResp.json()
+        setRows(sharesData.shares ?? [])
+        if (tagsResp.ok) {
+          const tagsData = await tagsResp.json()
+          setForumTags(tagsData.tags ?? [])
+        }
       } finally {
         setLoading(false)
       }
@@ -76,13 +96,52 @@ export default function AdvisorInboxPage() {
     <PageShell bucket="detail" surface="functional">
       <PageHeader
         eyebrow="Advisor"
-        title="Shared with you"
+        title="Inbox"
         subtitle={
-          rows.length === 0
-            ? 'No plans have been shared with you yet.'
-            : `${rows.length} plan${rows.length === 1 ? '' : 's'} from investors${newCount > 0 ? ` · ${newCount} new` : ''}.`
+          rows.length === 0 && forumTags.length === 0
+            ? 'No shared plans or forum tags yet.'
+            : `${rows.length} shared plan${rows.length === 1 ? '' : 's'}${newCount > 0 ? ` · ${newCount} new` : ''} · ${forumTags.length} forum tag${forumTags.length === 1 ? '' : 's'}.`
         }
       />
+
+      {/* Forum tags — BRD §3.4. Shown above shared plans because they're
+          generally more time-sensitive and higher-volume. */}
+      {forumTags.length > 0 && (
+        <section className="mb-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-400 mb-3 flex items-center gap-2">
+            <ChatBubbleLeftEllipsisIcon className="h-4 w-4" /> Tagged in forum questions
+          </h2>
+          <div className="space-y-2">
+            {forumTags.map((t) => (
+              <a
+                key={t.questionId}
+                href={`/forum/questions/${t.questionId}`}
+                className="card p-4 block hover:shadow-md transition"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-forest-700 truncate">{t.title}</h3>
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{t.contentPreview}</p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Asked by <span className="font-medium">{t.askerName}</span>
+                      {t.askerCity && ` · ${t.askerCity}`}
+                      {' · '}
+                      {t.answerCount} answer{t.answerCount === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-500 flex-shrink-0">
+                    {new Date(t.taggedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-400 mb-3 flex items-center gap-2">
+        <InboxIcon className="h-4 w-4" /> Shared plans
+      </h2>
 
       {rows.length === 0 ? (
         <div className="card p-12 text-center">

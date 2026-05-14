@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§4 Plan sharing landed end-to-end — schema, investor share UI, advisor inbox + comments, compare-feedback view; only the advisor-notification row left, blocked by §10)
+**Last Updated**: 2026-05-13 (§5 Advisor discovery & engagement fully green — faceted filter sidebar, advisor ratings + reviews, forum advisor-tagging with inbox surface; advisor article-tagging deferred to BRD §3.4 follow-up)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -108,16 +108,16 @@ BRD §3.3, §5.3, §11.2 position plan-sharing as the platform's key competitive
 
 ---
 
-## 5. Advisor discovery & engagement
+## 5. Advisor discovery & engagement — fully landed
 
 | Feature | Status | Notes |
 |---|---|---|
 | List/search advisors | ✅ | [advisors page](../../app/advisors/page.tsx), [search](../../app/api/advisors/search/route.ts) |
 | Public profile | ✅ | [advisor detail](../../app/advisors/[id]/page.tsx) |
 | Follow advisor | ✅ | `advisor_followers`, denormalized count |
-| **Filter by expertise/products/brands** | 🟡 | Possible via tags; no faceted UI |
-| **Advisor ratings/reviews** | ❌ | BRD §3.1 (optional) and §7.1 high-priority |
-| **Tag advisor in question/article** | ❌ | BRD §3.4 — community can tag advisors. Not modeled |
+| **Filter by expertise/products/services/brands** | ✅ | Faceted sidebar on [/advisors](../../app/advisors/page.tsx); search route ANDs across dimensions, ORs within. AdvisorProduct/Service/Brand back-relations on User power Prisma's `some` filter |
+| **Advisor ratings/reviews** | ✅ | `advisor_ratings` table, denormalised `ratingCount`/`ratingAverage` on advisor_profiles. POST/GET/DELETE at [/api/advisors/:id/ratings](../../app/api/advisors/[id]/ratings/route.ts); aggregate recomputed in-transaction. Star-picker + reviews list on advisor public profile. Eligibility intentionally permissive at MVP (any signed-in non-self) |
+| **Tag advisor in forum question** | ✅ | `forum_question_advisor_tags` join table, capped at 5 per question. Multi-select tagging UI on [/forum/ask](../../app/forum/ask/page.tsx); tagged advisors render as pills on the question detail page. Advisor's [tagged-feed](../../app/api/advisor/forum-tags/route.ts) surfaces in [/advisor/inbox](../../app/advisor/inbox/page.tsx) — the notification surface until §10 lands |
 
 ---
 
@@ -287,6 +287,14 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §5 Advisor discovery & engagement — 3 of 3 remaining rows ❌/🟡 → ✅ (BRD §3.1, §3.4, §7.1).
+  - **Schema**: `advisor_ratings` (one per investor↔advisor pair, unique), `forum_question_advisor_tags` (M:N pivot). Denormalised `ratingCount` + `ratingAverage` (Decimal(3,2)) on `advisor_profiles` recomputed in-transaction with every write so the public card is always exact. Added `user` back-relations on `advisor_products` / `advisor_services` / `advisor_brands` so Prisma can filter advisors by joined master-data without raw SQL. New indexes on the three M:N pivots' `<X>_id` columns to make the faceted lookup cheap, plus `idx_advisor_profiles_rating_average` for the "top rated" sort. Migration `20260514025441_discovery_engagement`.
+  - **BRD §3.1 step 5 / §5 Filter by products/services/brands** (🟡 → ✅). [GET /api/advisors/search](../../app/api/advisors/search/route.ts) extended to accept repeatable `product`, `service`, `brand` UUIDs plus existing `q`/`city`/`specialization`. AND across dimensions, OR within (matches the affordance the sidebar gives). New `sort=rating` branch uses `(ratingAverage DESC NULLS LAST, ratingCount DESC, createdAt DESC)` so unrated advisors don't outrank mid-rated ones. Faceted sidebar UI on [/advisors](../../app/advisors/page.tsx) with checkbox panels per master-data domain, deep-linkable URL state, and a clear-all action.
+  - **BRD §7.1 Advisor ratings/reviews** (❌ → ✅). Investor leaves a 1-5 star rating + optional review (max 4000 chars) at the advisor profile via [POST/GET/DELETE /api/advisors/:id/ratings](../../app/api/advisors/[id]/ratings/route.ts). Upsert semantics — investor edits their existing row, never accumulates duplicates. Self-rating + un-approved-advisor both rejected. Eligibility intentionally permissive at MVP (any signed-in non-self user) — tightening to "must have shared a plan" is a follow-up after we have signal on whether it harms cold-start more than it helps trust. AdvisorCard shows ⭐ avg + count in search results; public profile gets a ratings section with summary, write/edit form (StarPicker with hover preview), and reviews list.
+  - **BRD §3.4 Tag advisor in forum question** (❌ → ✅). [POST /api/forum/questions](../../app/api/forum/questions/route.ts) accepts `taggedAdvisorIds: string[]` (capped at 5 — see [`lib/advisor-engagement.ts`](../../lib/advisor-engagement.ts) MAX_TAGGED_ADVISORS_PER_QUESTION). Self-tag dropped silently; non-approved advisors rejected. Question detail GET now returns `tagged_advisors[]` so [/forum/questions/[id]](../../app/forum/questions/[id]/page.tsx) renders pill links to each. Ask form has a search-and-pick advisor selector that respects the cap.
+  - **Notification surface**: until §10 lands, advisors check tags via the new [GET /api/advisor/forum-tags](../../app/api/advisor/forum-tags/route.ts) endpoint, surfaced in a "Tagged in forum questions" section above the shared-plans list on [/advisor/inbox](../../app/advisor/inbox/page.tsx). Same pattern the plan-sharing inbox follows — both will hand off to real notifications when that subsystem ships.
+  - **Article tagging** (BRD §3.4 ALSO mentions tagging advisors in articles): not in this commit. Articles are advisor-authored, so investor→advisor tagging makes less sense there. Defer to a separate scope decision — current shape supports questions only.
+  - Verified: type-check clean, 278/278 unit tests pass.
 - **2026-05-13** — §4 Plan sharing — 8 of 9 rows ❌ → ✅ (BRD §3.3, §5.3, §8.1, §8.5, UC-7). The platform's headline differentiator is now live end-to-end:
   - **Schema**: new `plan_shares` (one row per investor↔advisor for a plan, unique on `(plan_id, advisor_id)`, status NEW/VIEWED/REVIEWED/REVOKED, permission VIEW/COMMENT) and `plan_comments` (per-share thread) tables. Migration `20260514020000_plan_sharing` + Prisma drift fix-up `20260514020821_plan_sharing` (FK `ON UPDATE` rewrite, same pattern as `bk_refactor_1`). Constants live in [`lib/plan-sharing.ts`](../../lib/plan-sharing.ts) so the cap and status set can't drift between routes.
   - **BRD §8.1 cap (max 5 advisors)** enforced in [POST /api/financial-plans/:id/share](../../app/api/financial-plans/[id]/share/route.ts) by combining current active shares with the new request and rejecting with 409 if it would exceed 5. Re-sharing after revoke flips the existing row's status back to NEW (upsert) rather than inserting a duplicate.

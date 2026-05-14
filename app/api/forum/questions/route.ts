@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 
 import { requireAuth } from '@/lib/auth-helpers'
 import { prisma } from '@/lib/db'
+import { MAX_TAGGED_ADVISORS_PER_QUESTION } from '@/lib/advisor-engagement'
 
 function serializeQuestion(q: any) {
-  const { author, ...rest } = q
+  const { author, taggedAdvisors, ...rest } = q
   return {
     id: rest.id,
     title: rest.title,
@@ -15,6 +17,17 @@ function serializeQuestion(q: any) {
     author: author
       ? { id: author.id, email: author.email, full_name: author.name }
       : null,
+    // Optional — present only when the relation was included in the query.
+    tagged_advisors: Array.isArray(taggedAdvisors)
+      ? taggedAdvisors.map((t: any) => ({
+          id: t.advisorId,
+          name:
+            t.advisor?.advisorProfile?.displayName ||
+            t.advisor?.name ||
+            t.advisor?.email,
+          company: t.advisor?.advisorProfile?.companyName ?? null,
+        }))
+      : undefined,
   }
 }
 
@@ -63,30 +76,93 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const createSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  content: z.string().trim().min(1),
+  taggedAdvisorIds: z
+    .array(z.string().uuid())
+    .max(MAX_TAGGED_ADVISORS_PER_QUESTION)
+    .optional()
+    .default([]),
+})
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth()
     if ('error' in auth) return auth.error
     const { user } = auth
 
-    const body = await request.json()
-    const { title, content } = body
-
-    if (!title || !content) {
-      return NextResponse.json({ error: 'Title and content are required' }, { status: 400 })
+    const parsed = createSchema.safeParse(await request.json().catch(() => null))
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid payload', issues: parsed.error.issues },
+        { status: 400 },
+      )
     }
 
-    const data = await prisma.forumQuestion.create({
-      data: {
-        authorId: user.id,
-        title,
-        content,
-        status: 'open',
-        answerCount: 0,
-      },
-      include: {
-        author: { select: { id: true, email: true, name: true } },
-      },
+    // Dedupe + drop self-tag (advisor authoring shouldn't tag themselves).
+    const taggedAdvisorIds = Array.from(
+      new Set(parsed.data.taggedAdvisorIds.filter((id) => id !== user.id)),
+    )
+
+    // Validate every tagged id belongs to an approved advisor — otherwise the
+    // question would render with phantom tags. Cheap one-shot lookup.
+    if (taggedAdvisorIds.length > 0) {
+      const validAdvisors = await prisma.advisorProfile.findMany({
+        where: {
+          userId: { in: taggedAdvisorIds },
+          workflowStatus: 'approved',
+        },
+        select: { userId: true },
+      })
+      const validIds = new Set(validAdvisors.map((a) => a.userId))
+      const invalid = taggedAdvisorIds.filter((id) => !validIds.has(id))
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { error: 'One or more tagged advisors are not approved', invalid },
+          { status: 400 },
+        )
+      }
+    }
+
+    const data = await prisma.$transaction(async (tx) => {
+      const created = await tx.forumQuestion.create({
+        data: {
+          authorId: user.id,
+          title: parsed.data.title,
+          content: parsed.data.content,
+          status: 'open',
+          answerCount: 0,
+        },
+      })
+      if (taggedAdvisorIds.length > 0) {
+        await tx.forumQuestionAdvisorTag.createMany({
+          data: taggedAdvisorIds.map((advisorId) => ({
+            questionId: created.id,
+            advisorId,
+          })),
+        })
+      }
+      return tx.forumQuestion.findUnique({
+        where: { id: created.id },
+        include: {
+          author: { select: { id: true, email: true, name: true } },
+          taggedAdvisors: {
+            include: {
+              advisor: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  advisorProfile: {
+                    select: { displayName: true, companyName: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
     })
 
     return NextResponse.json({

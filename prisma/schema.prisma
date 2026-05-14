@@ -60,6 +60,12 @@ model User {
   forumAnswerVotes    ForumAnswerVote[]
   invoices            Invoice[]
   subscriptions       Subscription[]
+  advisorProducts     AdvisorProduct[]     @relation("AdvisorProductsForUser")
+  advisorServices     AdvisorService[]     @relation("AdvisorServicesForUser")
+  advisorBrands       AdvisorBrand[]       @relation("AdvisorBrandsForUser")
+  ratingsReceived     AdvisorRating[]      @relation("AdvisorRated")
+  ratingsGiven        AdvisorRating[]      @relation("InvestorRated")
+  forumTagsReceived   ForumQuestionAdvisorTag[] @relation("ForumTaggedAdvisor")
   planSharesReceived  PlanShare[]          @relation("PlanSharesReceived")
   planCommentsAuthored PlanComment[]       @relation("PlanCommentsAuthored")
   adminAuditActions   AdminAudit[]         @relation("AdminAuditActor")
@@ -246,10 +252,12 @@ model AdvisorProduct {
   priority   Int      @default(1)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
+  user    User              @relation("AdvisorProductsForUser", fields: [userId], references: [id], onDelete: Cascade)
   product MasterDataProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@id([userId, productId])
   @@index([userId, priority], map: "idx_advisor_product_priority")
+  @@index([productId], map: "idx_advisor_product_product")
   @@map("advisor_products")
 }
 
@@ -260,10 +268,12 @@ model AdvisorService {
   priority   Int      @default(1)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
+  user    User              @relation("AdvisorServicesForUser", fields: [userId], references: [id], onDelete: Cascade)
   service MasterDataService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@id([userId, serviceId])
   @@index([userId, priority], map: "idx_advisor_service_priority")
+  @@index([serviceId], map: "idx_advisor_service_service")
   @@map("advisor_services")
 }
 
@@ -274,10 +284,12 @@ model AdvisorBrand {
   brandId   String   @map("brand_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
+  user  User            @relation("AdvisorBrandsForUser", fields: [userId], references: [id], onDelete: Cascade)
   brand MasterDataBrand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@id([userId, brandId])
   @@index([userId], map: "idx_advisor_brand_user")
+  @@index([brandId], map: "idx_advisor_brand_brand")
   @@map("advisor_brands")
 }
 
@@ -473,6 +485,13 @@ model AdvisorProfile {
   isVerified      Boolean?  @default(false) @map("is_verified")
   verifiedAt      DateTime? @map("verified_at") @db.Timestamp(6)
   followerCount   Int       @default(0) @map("follower_count")
+  /// Denormalised aggregates for the public profile rating card. Kept in sync
+  /// by the rating routes (recompute inside the same transaction as
+  /// create/update/delete). BRD §7.1 high-priority — average is shown
+  /// prominently; ratingCount qualifies the average ("4.6 from 23 reviews").
+  /// ratingAverage stored as Decimal(3,2) so 4.67 is exact, no float drift.
+  ratingCount     Int       @default(0) @map("rating_count")
+  ratingAverage   Decimal?  @map("rating_average") @db.Decimal(3, 2)
   createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt       DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
 
@@ -480,6 +499,7 @@ model AdvisorProfile {
   approver User? @relation("AdvisorProfileApprover", fields: [approvedBy], references: [id], onDelete: NoAction)
 
   @@index([followerCount(sort: Desc)], map: "idx_advisor_profiles_follower_count")
+  @@index([ratingAverage(sort: Desc)], map: "idx_advisor_profiles_rating_average")
   @@index([userId], map: "idx_advisor_profiles_user_id")
   @@index([workflowStatus], map: "idx_advisor_profiles_workflow_status")
   @@map("advisor_profiles")
@@ -589,8 +609,9 @@ model ForumQuestion {
   createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
 
-  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  answers ForumAnswer[]
+  author         User                      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  answers        ForumAnswer[]
+  taggedAdvisors ForumQuestionAdvisorTag[]
 
   @@index([authorId], map: "idx_forum_questions_author_id")
   @@index([createdAt(sort: Desc)], map: "idx_forum_questions_created_at")
@@ -725,6 +746,63 @@ model PlanComment {
   @@index([shareId, createdAt], map: "idx_plan_comments_share_created")
   @@index([authorId], map: "idx_plan_comments_author")
   @@map("plan_comments")
+}
+
+// ============================================================================
+// Advisor ratings & reviews (BRD §7.1 high-priority, §3.1 mentions optional)
+// ============================================================================
+//
+// One rating per (investor, advisor) pair — investor can edit their existing
+// row but never have multiple. Stars 1..5, validated in the route. Optional
+// free-text review body. AdvisorProfile.ratingCount + ratingAverage are
+// denormalised aggregates, recomputed inside the same transaction as the
+// create/update/delete so the card is always exact (no eventual-consistency
+// window). Eligibility is intentionally permissive at MVP: any authenticated
+// user can rate any advisor except themselves. Tightening this to "must have
+// shared a plan with the advisor" is a follow-up once we have signal on
+// whether that gate harms cold-start more than it helps trust.
+
+model AdvisorRating {
+  id         String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  advisorId  String   @map("advisor_id") @db.Uuid
+  investorId String   @map("investor_id") @db.Uuid
+  /// 1..5. Enforced at the route boundary; no DB CHECK constraint to keep
+  /// the migration trivial — adjust to a CHECK in a follow-up if/when we
+  /// expose direct DB writers (we don't today).
+  stars      Int
+  reviewBody String?  @map("review_body")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  advisor  User @relation("AdvisorRated", fields: [advisorId], references: [id], onDelete: Cascade)
+  investor User @relation("InvestorRated", fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@unique([investorId, advisorId])
+  @@index([advisorId, createdAt(sort: Desc)], map: "idx_advisor_ratings_advisor_recent")
+  @@map("advisor_ratings")
+}
+
+// ============================================================================
+// Forum advisor tagging (BRD §3.4 — investor tags advisors when asking)
+// ============================================================================
+//
+// Pure M:N pivot. The forum-question route caps tagged advisors at 5 per
+// question (parallel to the BRD §8.1 plan-share cap — same anti-spam
+// reasoning). An advisor's "tagged you" feed is the inverse query
+// (forumQuestionAdvisorTags where advisorId = me) and serves as the
+// notification surface until §10 (real notifications) lands.
+
+model ForumQuestionAdvisorTag {
+  questionId String   @map("question_id") @db.Uuid
+  advisorId  String   @map("advisor_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  question ForumQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  advisor  User          @relation("ForumTaggedAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, advisorId])
+  @@index([advisorId, createdAt(sort: Desc)], map: "idx_forum_tag_advisor_recent")
+  @@map("forum_question_advisor_tags")
 }
 
 // ============================================================================

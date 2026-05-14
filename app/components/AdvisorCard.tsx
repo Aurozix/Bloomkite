@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { UserIcon, CheckBadgeIcon } from '@heroicons/react/24/outline'
+import { UserIcon, CheckBadgeIcon, StarIcon } from '@heroicons/react/24/outline'
+import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 
 interface AdvisorCardProps {
   id: string
@@ -12,6 +13,8 @@ interface AdvisorCardProps {
   is_verified: boolean
   follower_count: number
   expertise: string[]
+  rating_average?: number | null
+  rating_count?: number
 }
 
 export function AdvisorCard({
@@ -23,6 +26,8 @@ export function AdvisorCard({
   is_verified,
   follower_count,
   expertise,
+  rating_average,
+  rating_count = 0,
 }: AdvisorCardProps) {
   const router = useRouter()
 
@@ -44,7 +49,22 @@ export function AdvisorCard({
             )}
           </div>
           {company_name && <p className="text-sm text-gray-600">{company_name}</p>}
-          <p className="text-xs text-gray-500 mt-1">{follower_count} followers</p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            <span>{follower_count} followers</span>
+            {rating_count > 0 && rating_average !== null && rating_average !== undefined && (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <StarSolid className="h-3.5 w-3.5" />
+                <span className="font-semibold">{rating_average.toFixed(1)}</span>
+                <span className="text-gray-500">({rating_count})</span>
+              </span>
+            )}
+            {rating_count === 0 && (
+              <span className="inline-flex items-center gap-1 text-gray-400">
+                <StarIcon className="h-3.5 w-3.5" />
+                Unrated
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
