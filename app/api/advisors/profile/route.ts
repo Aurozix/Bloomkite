@@ -16,6 +16,10 @@ function serializeProfile(p: any) {
     designation: p.designation,
     pan_number: p.panNumber,
     gst_number: p.gstNumber,
+    // BRD §3.2 step 3 — Professional Information.
+    years_of_experience: p.yearsOfExperience,
+    license_registration_number: p.licenseRegistrationNumber,
+    license_registration_body: p.licenseRegistrationBody,
     address_line1: p.addressLine1,
     address_line2: p.addressLine2,
     city: p.city,
@@ -78,8 +82,29 @@ export async function PUT(request: NextRequest) {
       state,
       website_url,
       phone_number,
+      years_of_experience,
+      license_registration_number,
+      license_registration_body,
       expertise,
     } = body
+
+    // Validate years_of_experience if supplied — non-negative integer, plus a
+    // sanity upper bound so a typo doesn't write "1990" instead of "19".
+    let parsedYears: number | null | undefined = undefined
+    if (years_of_experience !== undefined) {
+      if (years_of_experience === null || years_of_experience === '') {
+        parsedYears = null
+      } else {
+        const n = Number(years_of_experience)
+        if (!Number.isInteger(n) || n < 0 || n > 70) {
+          return NextResponse.json(
+            { error: 'years_of_experience must be an integer 0-70' },
+            { status: 400 },
+          )
+        }
+        parsedYears = n
+      }
+    }
 
     let data
     try {
@@ -94,6 +119,15 @@ export async function PUT(request: NextRequest) {
           state: state || null,
           websiteUrl: website_url || null,
           phoneNumber: phone_number || null,
+          // Only update the three new fields when the client included them —
+          // lets a partial save (e.g. just bio + city) leave them untouched.
+          ...(parsedYears !== undefined ? { yearsOfExperience: parsedYears } : {}),
+          ...(license_registration_number !== undefined
+            ? { licenseRegistrationNumber: license_registration_number || null }
+            : {}),
+          ...(license_registration_body !== undefined
+            ? { licenseRegistrationBody: license_registration_body || null }
+            : {}),
           updatedAt: new Date(),
         },
       })

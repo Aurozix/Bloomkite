@@ -34,6 +34,10 @@ export default function ProfilePage() {
   const [state, setState] = useState('')
   const [website, setWebsite] = useState('')
   const [phone, setPhone] = useState('')
+  // BRD §3.2 step 3 — Professional Information.
+  const [yearsOfExperience, setYearsOfExperience] = useState('')
+  const [licenseRegistrationNumber, setLicenseRegistrationNumber] = useState('')
+  const [licenseRegistrationBody, setLicenseRegistrationBody] = useState('')
 
   // Credentials
   const [credentials, setCredentials] = useState<Credential[]>([])
@@ -84,6 +88,13 @@ export default function ProfilePage() {
           setState(profile.state || '')
           setWebsite(profile.website_url || '')
           setPhone(profile.phone_number || '')
+          setYearsOfExperience(
+            typeof profile.years_of_experience === 'number'
+              ? String(profile.years_of_experience)
+              : '',
+          )
+          setLicenseRegistrationNumber(profile.license_registration_number || '')
+          setLicenseRegistrationBody(profile.license_registration_body || '')
           setExpertise(Array.isArray(profile.expertise) ? profile.expertise : [])
         }
 
@@ -119,6 +130,9 @@ export default function ProfilePage() {
           state,
           website_url: website,
           phone_number: phone,
+          years_of_experience: yearsOfExperience === '' ? null : Number(yearsOfExperience),
+          license_registration_number: licenseRegistrationNumber,
+          license_registration_body: licenseRegistrationBody,
           expertise,
         }),
       })
@@ -303,6 +317,54 @@ export default function ProfilePage() {
                 value={state}
                 onChange={(e) => setState(e.target.value)}
               />
+            </div>
+          </div>
+
+          {/* BRD §3.2 step 3 — Professional Information */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Professional Information</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Required before your profile can be approved for public listing.
+            </p>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Years of Experience
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={70}
+                  className="input-modern w-full"
+                  value={yearsOfExperience}
+                  onChange={(e) => setYearsOfExperience(e.target.value)}
+                  placeholder="e.g. 14"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  License / Registration Number
+                </label>
+                <input
+                  type="text"
+                  className="input-modern w-full"
+                  value={licenseRegistrationNumber}
+                  onChange={(e) => setLicenseRegistrationNumber(e.target.value)}
+                  placeholder="e.g. INA000012345"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Issuing Body
+                </label>
+                <input
+                  type="text"
+                  className="input-modern w-full"
+                  value={licenseRegistrationBody}
+                  onChange={(e) => setLicenseRegistrationBody(e.target.value)}
+                  placeholder="e.g. SEBI, IRDA, AMFI"
+                />
+              </div>
             </div>
           </div>
 

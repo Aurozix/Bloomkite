@@ -80,7 +80,7 @@ This is a living document. Whenever work ships that moves a row's status:
 | Step | Status | Notes |
 |---|---|---|
 | Personal info | ✅ | `advisor_profiles` |
-| Professional info (license, experience) | 🟡 | Has company/designation/PAN/GST; no structured "years of experience" or license registration number |
+| Professional info (license, experience) | ✅ | Adds `yearsOfExperience` (Int, 0-70 validated), `licenseRegistrationNumber`, `licenseRegistrationBody` (e.g., SEBI/IRDA/AMFI). Profile route accepts partial updates; admin gate before approval should enforce non-null when production-ready. |
 | Certifications/awards/education/experience | 🟡 | One generic `advisor_credentials` table — does not separate the four credential classes BRD §3.2 calls out |
 | **Products / Services / Brands declaration** | ❌ | `advisor_expertise` stores free-text tags only. BRD §3.2 expects three distinct master-data-backed dimensions |
 | **Advisor ranking / priority** | ❌ | BRD §3.2 step 6 — assign priority to products/services. Not modeled |
@@ -287,6 +287,7 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §3 Advisor Professional Information (🟡 → ✅, BRD §3.2 step 3). Three new columns on `advisor_profiles`: `years_of_experience` (Int, validated 0-70), `license_registration_number`, `license_registration_body` (e.g., SEBI / IRDA / AMFI / Pension Fund Reg). Migration `20260513240100_advisor_professional_info`. Profile PUT accepts these as partial-update fields (omit to leave untouched). Form fields rendered under a new "Professional Information" section in [/profile/advisor](../../app/profile/advisor/page.tsx). Admin approval gate should require non-null before workflow_status='approved' — that enforcement is a separate admin-route task.
 - **2026-05-13** — §9 Master-data foundation (5 of 8 domains ❌ → ✅): investment categories, products, services, brands, account types. New Prisma models all sharing the same shape (slug + name + description + sortOrder + isActive). Migration `20260513240000_master_data`. Seeded via [`database/seed-master-data.ts`](../../database/seed-master-data.ts) — idempotent, never overwrites admin-edited names or reactivates deactivated rows. No admin CRUD UI yet (deferred per design call; the seed script is the operational entry point for now). Foundation for §3 investor-interests + advisor-products/services/brands work that follows.
 - **2026-05-13** — §2 Phone OTP verification (❌ → ✅). New work:
   - `User.phoneNumber` + `User.phoneVerifiedAt` columns (Prisma migration `20260513230200_phone_verification`)

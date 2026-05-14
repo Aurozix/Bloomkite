@@ -359,6 +359,13 @@ model AdvisorProfile {
   designation     String?   @db.VarChar(100)
   panNumber       String?   @map("pan_number") @db.VarChar(20)
   gstNumber       String?   @map("gst_number") @db.VarChar(20)
+  // BRD §3.2 step 3: Professional Information — years of experience and the
+  // advisor's SEBI/IRDA/etc. registration number. Optional during onboarding
+  // so the profile shell can exist; required before workflowStatus moves to
+  // "approved" (admin gate enforces).
+  yearsOfExperience      Int?     @map("years_of_experience")
+  licenseRegistrationNumber String? @map("license_registration_number") @db.VarChar(100)
+  licenseRegistrationBody   String? @map("license_registration_body") @db.VarChar(100)
   addressLine1    String?   @map("address_line1") @db.VarChar(255)
   addressLine2    String?   @map("address_line2") @db.VarChar(255)
   city            String?   @db.VarChar(100)
