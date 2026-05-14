@@ -159,7 +159,6 @@ model MasterDataInvestmentCategory {
 
 /// Products an advisor can offer (BRD §3.2 step 5). Mutual Funds, Insurance,
 /// Fixed Deposits, PMS, AIF, Bonds, ULIPs.
-/// Back-relation to AdvisorProduct is added in the advisor-PSB commit.
 model MasterDataProduct {
   id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   slug        String   @unique @db.VarChar(80)
@@ -170,13 +169,14 @@ model MasterDataProduct {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  advisorProducts AdvisorProduct[]
+
   @@index([sortOrder, name], map: "idx_md_product_order")
   @@map("master_data_products")
 }
 
 /// Services an advisor offers (BRD §3.2 step 5). Wealth Management,
 /// Retirement Planning, Tax Planning, Estate Planning, etc.
-/// Back-relation to AdvisorService is added in the advisor-PSB commit.
 model MasterDataService {
   id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   slug        String   @unique @db.VarChar(80)
@@ -187,13 +187,14 @@ model MasterDataService {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  advisorServices AdvisorService[]
+
   @@index([sortOrder, name], map: "idx_md_service_order")
   @@map("master_data_services")
 }
 
 /// Brands / financial institutions an advisor works with (BRD §3.2 step 5).
 /// HDFC, ICICI, SBI, Kotak, etc.
-/// Back-relation to AdvisorBrand is added in the advisor-PSB commit.
 model MasterDataBrand {
   id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   slug        String   @unique @db.VarChar(80)
@@ -204,8 +205,63 @@ model MasterDataBrand {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  advisorBrands AdvisorBrand[]
+
   @@index([sortOrder, name], map: "idx_md_brand_order")
   @@map("master_data_brands")
+}
+
+// ============================================================================
+// Advisor declarations (BRD §3.2 step 5-6)
+// ============================================================================
+//
+// Three join tables connect an advisor's userId to the master_data they've
+// declared. Products + Services carry a `priority` column for advisor ranking
+// (BRD §3.2 step 6 — "assign priority/preference to products/services");
+// Brands do not — the BRD doesn't ask for brand ranking. Priorities are
+// 1-based ints, 1 = highest preference; gaps are tolerated (we don't
+// renumber on delete) so reorders are cheap.
+
+/// Advisor ↔ products M:N with priority ranking.
+model AdvisorProduct {
+  userId     String   @map("user_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  priority   Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  product MasterDataProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@index([userId, priority], map: "idx_advisor_product_priority")
+  @@map("advisor_products")
+}
+
+/// Advisor ↔ services M:N with priority ranking.
+model AdvisorService {
+  userId     String   @map("user_id") @db.Uuid
+  serviceId  String   @map("service_id") @db.Uuid
+  priority   Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  service MasterDataService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+  @@index([userId, priority], map: "idx_advisor_service_priority")
+  @@map("advisor_services")
+}
+
+/// Advisor ↔ brands M:N. No priority — BRD §3.2 step 6 ranks products and
+/// services only.
+model AdvisorBrand {
+  userId    String   @map("user_id") @db.Uuid
+  brandId   String   @map("brand_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  brand MasterDataBrand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([userId, brandId])
+  @@index([userId], map: "idx_advisor_brand_user")
+  @@map("advisor_brands")
 }
 
 /// Account types an investor can declare in onboarding (BRD §3.1 step 5).

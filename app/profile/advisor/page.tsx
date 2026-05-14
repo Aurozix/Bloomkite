@@ -64,9 +64,22 @@ export default function ProfilePage() {
   const [endDate, setEndDate] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  // Expertise
+  // Expertise (legacy free-text tags — superseded by structured declarations
+  // below; left in place so existing data isn't lost. Remove in cleanup.)
   const [expertise, setExpertise] = useState<string[]>([])
   const [newExpertise, setNewExpertise] = useState('')
+
+  // BRD §3.2 step 5+6 — Products / Services / Brands declaration with
+  // priority ranking. Each is an ordered list; brands carry no priority.
+  type MasterRow = { id: string; slug: string; name: string }
+  type Declared<K extends string> = { name: string; slug: string } & Record<K, string>
+  const [productsCatalog, setProductsCatalog] = useState<MasterRow[]>([])
+  const [servicesCatalog, setServicesCatalog] = useState<MasterRow[]>([])
+  const [brandsCatalog, setBrandsCatalog] = useState<MasterRow[]>([])
+  const [declaredProducts, setDeclaredProducts] = useState<Declared<'productId'>[]>([])
+  const [declaredServices, setDeclaredServices] = useState<Declared<'serviceId'>[]>([])
+  const [declaredBrands, setDeclaredBrands] = useState<Declared<'brandId'>[]>([])
+  const [savingDeclarations, setSavingDeclarations] = useState(false)
 
   // Fetch user and profile on mount
   useEffect(() => {
@@ -113,6 +126,40 @@ export default function ProfilePage() {
           setLicenseRegistrationNumber(profile.license_registration_number || '')
           setLicenseRegistrationBody(profile.license_registration_body || '')
           setExpertise(Array.isArray(profile.expertise) ? profile.expertise : [])
+        }
+
+        // Fetch master-data catalogs (products / services / brands) + the
+        // advisor's existing declarations. All in parallel — they don't
+        // depend on each other and one failing shouldn't block the others.
+        const [
+          productsCatalogRes,
+          servicesCatalogRes,
+          brandsCatalogRes,
+          declarationsRes,
+        ] = await Promise.allSettled([
+          fetch('/api/master-data/products'),
+          fetch('/api/master-data/services'),
+          fetch('/api/master-data/brands'),
+          fetch('/api/advisors/declarations'),
+        ])
+
+        if (productsCatalogRes.status === 'fulfilled' && productsCatalogRes.value.ok) {
+          const j = await productsCatalogRes.value.json()
+          setProductsCatalog(j.data || [])
+        }
+        if (servicesCatalogRes.status === 'fulfilled' && servicesCatalogRes.value.ok) {
+          const j = await servicesCatalogRes.value.json()
+          setServicesCatalog(j.data || [])
+        }
+        if (brandsCatalogRes.status === 'fulfilled' && brandsCatalogRes.value.ok) {
+          const j = await brandsCatalogRes.value.json()
+          setBrandsCatalog(j.data || [])
+        }
+        if (declarationsRes.status === 'fulfilled' && declarationsRes.value.ok) {
+          const j = await declarationsRes.value.json()
+          setDeclaredProducts(j.data?.products || [])
+          setDeclaredServices(j.data?.services || [])
+          setDeclaredBrands(j.data?.brands || [])
         }
 
         // Fetch credentials
@@ -166,6 +213,45 @@ export default function ProfilePage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSaveDeclarations = async () => {
+    setSavingDeclarations(true)
+    try {
+      const res = await fetch('/api/advisors/declarations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Priority is positional — the server uses index+1 when no
+          // explicit priority is sent. UI keeps the list in display order.
+          products: declaredProducts.map((p, i) => ({
+            productId: p.productId,
+            priority: i + 1,
+          })),
+          services: declaredServices.map((s, i) => ({
+            serviceId: s.serviceId,
+            priority: i + 1,
+          })),
+          brands: declaredBrands.map((b) => ({ brandId: b.brandId })),
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        addToast(data.error || 'Failed to save declarations', 'error')
+        return
+      }
+      addToast('Declarations saved', 'success')
+    } finally {
+      setSavingDeclarations(false)
+    }
+  }
+
+  const moveItem = <T,>(list: T[], idx: number, dir: -1 | 1): T[] => {
+    const next = [...list]
+    const target = idx + dir
+    if (target < 0 || target >= next.length) return next
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    return next
   }
 
   const handleUploadCredential = async () => {
@@ -640,9 +726,98 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Expertise */}
+        {/* BRD §3.2 step 5+6 — Products / Services / Brands + priority ranking */}
+        <div className="card p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Products, Services & Brands
+          </h2>
+          <p className="text-sm text-gray-600 mb-6">
+            Declare what you advise on. For Products and Services, order matters —
+            items at the top show first on your public profile.
+          </p>
+
+          {/* Products */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Products</h3>
+            <DeclarationPicker
+              kind="product"
+              catalog={productsCatalog}
+              declared={declaredProducts.map((p) => ({ id: p.productId, name: p.name }))}
+              onAdd={(row) =>
+                setDeclaredProducts([
+                  ...declaredProducts,
+                  { productId: row.id, slug: row.slug, name: row.name },
+                ])
+              }
+              onMove={(idx, dir) => setDeclaredProducts(moveItem(declaredProducts, idx, dir))}
+              onRemove={(idx) =>
+                setDeclaredProducts(declaredProducts.filter((_, i) => i !== idx))
+              }
+              orderable
+            />
+          </div>
+
+          {/* Services */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Services</h3>
+            <DeclarationPicker
+              kind="service"
+              catalog={servicesCatalog}
+              declared={declaredServices.map((s) => ({ id: s.serviceId, name: s.name }))}
+              onAdd={(row) =>
+                setDeclaredServices([
+                  ...declaredServices,
+                  { serviceId: row.id, slug: row.slug, name: row.name },
+                ])
+              }
+              onMove={(idx, dir) => setDeclaredServices(moveItem(declaredServices, idx, dir))}
+              onRemove={(idx) =>
+                setDeclaredServices(declaredServices.filter((_, i) => i !== idx))
+              }
+              orderable
+            />
+          </div>
+
+          {/* Brands — no ranking per BRD §3.2 step 6 */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Brands</h3>
+            <DeclarationPicker
+              kind="brand"
+              catalog={brandsCatalog}
+              declared={declaredBrands.map((b) => ({ id: b.brandId, name: b.name }))}
+              onAdd={(row) =>
+                setDeclaredBrands([
+                  ...declaredBrands,
+                  { brandId: row.id, slug: row.slug, name: row.name },
+                ])
+              }
+              onMove={() => {
+                /* brands aren't orderable */
+              }}
+              onRemove={(idx) =>
+                setDeclaredBrands(declaredBrands.filter((_, i) => i !== idx))
+              }
+              orderable={false}
+            />
+          </div>
+
+          <button
+            onClick={handleSaveDeclarations}
+            disabled={savingDeclarations}
+            className="btn-primary w-full py-3 text-lg"
+          >
+            {savingDeclarations ? 'Saving...' : 'Save Declarations'}
+          </button>
+        </div>
+
+        {/* Expertise (legacy free-text — kept until structured declarations
+            fully replace it; remove in a cleanup commit). */}
         <div className="card p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Areas of Expertise</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Areas of Expertise</h2>
+          <p className="text-xs text-gray-500 mb-6">
+            Legacy free-text tags. New advisors should use the Products / Services / Brands
+            declarations above instead.
+          </p>
 
           {expertise.length > 0 && (
             <div className="mb-6">
@@ -693,6 +868,112 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+interface DeclarationPickerProps {
+  kind: 'product' | 'service' | 'brand'
+  catalog: Array<{ id: string; slug: string; name: string }>
+  declared: Array<{ id: string; name: string }>
+  onAdd: (row: { id: string; slug: string; name: string }) => void
+  onMove: (idx: number, dir: -1 | 1) => void
+  onRemove: (idx: number) => void
+  orderable: boolean
+}
+
+function DeclarationPicker({
+  kind,
+  catalog,
+  declared,
+  onAdd,
+  onMove,
+  onRemove,
+  orderable,
+}: DeclarationPickerProps) {
+  const declaredIds = new Set(declared.map((d) => d.id))
+  const available = catalog.filter((c) => !declaredIds.has(c.id))
+
+  return (
+    <div>
+      {declared.length > 0 ? (
+        <ol className="space-y-2 mb-4">
+          {declared.map((item, idx) => (
+            <li
+              key={item.id}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200"
+            >
+              {orderable && (
+                <span className="text-sm text-gray-500 font-mono w-6 text-right">
+                  {idx + 1}.
+                </span>
+              )}
+              <span className="flex-1 text-gray-900">{item.name}</span>
+              {orderable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onMove(idx, -1)}
+                    disabled={idx === 0}
+                    className="px-2 text-gray-500 hover:text-gray-900 disabled:opacity-30"
+                    aria-label="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMove(idx, 1)}
+                    disabled={idx === declared.length - 1}
+                    className="px-2 text-gray-500 hover:text-gray-900 disabled:opacity-30"
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => onRemove(idx)}
+                className="px-2 text-gray-500 hover:text-red-600"
+                aria-label="Remove"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-gray-500 italic mb-4">
+          None declared yet. Pick from the list below.
+        </p>
+      )}
+
+      {available.length > 0 ? (
+        <select
+          onChange={(e) => {
+            const id = e.target.value
+            if (!id) return
+            const row = catalog.find((c) => c.id === id)
+            if (row) onAdd(row)
+            e.target.value = ''
+          }}
+          defaultValue=""
+          className="input-modern w-full"
+        >
+          <option value="">
+            Add a {kind}...
+          </option>
+          {available.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="text-sm text-gray-500 italic">
+          All available {kind}s have been declared.
+        </p>
+      )}
     </div>
   )
 }
