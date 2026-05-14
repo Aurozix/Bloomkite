@@ -55,6 +55,22 @@ export const ADMIN_MASTER_DATA_DOMAINS: Record<string, DomainSpec> = {
     label: 'Calculator categories',
     delegate: prisma.masterDataCalculatorCategory as unknown as Delegate,
   },
+  'income-categories': {
+    label: 'Income categories (Cash Flow)',
+    delegate: prisma.masterDataIncomeCategory as unknown as Delegate,
+  },
+  'expense-categories': {
+    label: 'Expense categories (Cash Flow)',
+    delegate: prisma.masterDataExpenseCategory as unknown as Delegate,
+  },
+  'asset-types': {
+    label: 'Asset types (Net Worth)',
+    delegate: prisma.masterDataAssetType as unknown as Delegate,
+  },
+  'liability-types': {
+    label: 'Liability types (Net Worth)',
+    delegate: prisma.masterDataLiabilityType as unknown as Delegate,
+  },
 }
 
 export type AdminMasterDataDomainKey = keyof typeof ADMIN_MASTER_DATA_DOMAINS

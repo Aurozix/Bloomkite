@@ -91,6 +91,88 @@ const ACCOUNT_TYPES: SeedRow[] = [
   { slug: 'physical-gold', name: 'Physical Gold / Jewellery', sortOrder: 120 },
 ]
 
+// Urgency levels (1..9) — labels for the Priority Ranker calculator.
+// Slug 'urgency-N' encodes the rank; calculator looks up by sortOrder so
+// admins can rename labels without breaking math.
+const URGENCY_LEVELS: SeedRow[] = [
+  { slug: 'urgency-1', name: 'Critical', sortOrder: 1 },
+  { slug: 'urgency-2', name: 'Very Important', sortOrder: 2 },
+  { slug: 'urgency-3', name: 'Important', sortOrder: 3 },
+  { slug: 'urgency-4', name: 'To Be Deleted', sortOrder: 4, description: 'Special: signals the goal should be removed' },
+  { slug: 'urgency-5', name: 'Moderate', sortOrder: 5 },
+  { slug: 'urgency-6', name: 'Low', sortOrder: 6 },
+  { slug: 'urgency-7', name: 'Very Low', sortOrder: 7 },
+  { slug: 'urgency-8', name: 'Minor', sortOrder: 8 },
+  { slug: 'urgency-9', name: 'Least Urgent', sortOrder: 9 },
+]
+
+// Cash-flow income categories — picker on the Cash Flow calculator's income side.
+const INCOME_CATEGORIES: SeedRow[] = [
+  { slug: 'salary', name: 'Salary', sortOrder: 10 },
+  { slug: 'business-income', name: 'Business / Self-employment Income', sortOrder: 20 },
+  { slug: 'rental-income', name: 'Rental Income', sortOrder: 30 },
+  { slug: 'dividend-income', name: 'Dividend Income', sortOrder: 40 },
+  { slug: 'interest-income', name: 'Interest Income (FD, Bonds)', sortOrder: 50 },
+  { slug: 'capital-gains', name: 'Capital Gains (Realised)', sortOrder: 60 },
+  { slug: 'pension', name: 'Pension', sortOrder: 70 },
+  { slug: 'freelance', name: 'Freelance / Consulting', sortOrder: 80 },
+  { slug: 'other-income', name: 'Other Income', sortOrder: 99 },
+]
+
+// Cash-flow expense categories — picker on the Cash Flow calculator's expense side.
+const EXPENSE_CATEGORIES: SeedRow[] = [
+  { slug: 'rent-mortgage', name: 'Rent / Mortgage', sortOrder: 10 },
+  { slug: 'groceries', name: 'Groceries', sortOrder: 20 },
+  { slug: 'utilities', name: 'Utilities (Electricity, Water, Gas)', sortOrder: 30 },
+  { slug: 'internet-phone', name: 'Internet & Phone', sortOrder: 40 },
+  { slug: 'transportation', name: 'Transportation (Fuel, Public Transit)', sortOrder: 50 },
+  { slug: 'health-insurance-premium', name: 'Health Insurance Premium', sortOrder: 60 },
+  { slug: 'life-insurance-premium', name: 'Life Insurance Premium', sortOrder: 70 },
+  { slug: 'loan-emi', name: 'Loan EMI', sortOrder: 80 },
+  { slug: 'credit-card', name: 'Credit Card Payments', sortOrder: 90 },
+  { slug: 'education', name: 'Education / School Fees', sortOrder: 100 },
+  { slug: 'medical', name: 'Medical / Healthcare', sortOrder: 110 },
+  { slug: 'dining-entertainment', name: 'Dining & Entertainment', sortOrder: 120 },
+  { slug: 'subscriptions', name: 'Subscriptions (Streaming, SaaS)', sortOrder: 130 },
+  { slug: 'household', name: 'Household & Maintenance', sortOrder: 140 },
+  { slug: 'travel', name: 'Travel & Vacation', sortOrder: 150 },
+  { slug: 'taxes', name: 'Taxes (Self-paid)', sortOrder: 160 },
+  { slug: 'other-expense', name: 'Other Expense', sortOrder: 999 },
+]
+
+// Net-worth asset types — picker on the Net Worth calculator's assets side.
+const ASSET_TYPES: SeedRow[] = [
+  { slug: 'savings-account', name: 'Savings Account', sortOrder: 10 },
+  { slug: 'fixed-deposit', name: 'Fixed Deposit', sortOrder: 20 },
+  { slug: 'mutual-funds-asset', name: 'Mutual Funds (Holdings)', sortOrder: 30 },
+  { slug: 'direct-equity', name: 'Direct Equity / Stocks', sortOrder: 40 },
+  { slug: 'bonds-debentures', name: 'Bonds & Debentures', sortOrder: 50 },
+  { slug: 'ppf-asset', name: 'PPF Balance', sortOrder: 60 },
+  { slug: 'epf-asset', name: 'EPF Balance', sortOrder: 70 },
+  { slug: 'nps-asset', name: 'NPS Balance', sortOrder: 80 },
+  { slug: 'real-estate-residential', name: 'Real Estate (Residential)', sortOrder: 90 },
+  { slug: 'real-estate-investment', name: 'Real Estate (Investment)', sortOrder: 100 },
+  { slug: 'gold-jewellery', name: 'Gold / Jewellery', sortOrder: 110 },
+  { slug: 'vehicle', name: 'Vehicle (Car / Bike)', sortOrder: 120 },
+  { slug: 'insurance-cash-value', name: 'Insurance Cash Value (ULIP, Endowment)', sortOrder: 130 },
+  { slug: 'business-equity', name: 'Business Equity', sortOrder: 140 },
+  { slug: 'other-asset', name: 'Other Asset', sortOrder: 999 },
+]
+
+// Net-worth liability types — picker on the Net Worth calculator's liabilities side.
+const LIABILITY_TYPES: SeedRow[] = [
+  { slug: 'home-loan', name: 'Home Loan', sortOrder: 10 },
+  { slug: 'car-loan', name: 'Car Loan', sortOrder: 20 },
+  { slug: 'personal-loan', name: 'Personal Loan', sortOrder: 30 },
+  { slug: 'education-loan', name: 'Education Loan', sortOrder: 40 },
+  { slug: 'credit-card-outstanding', name: 'Credit Card Outstanding', sortOrder: 50 },
+  { slug: 'business-loan', name: 'Business Loan', sortOrder: 60 },
+  { slug: 'gold-loan', name: 'Gold Loan', sortOrder: 70 },
+  { slug: 'loan-against-property', name: 'Loan Against Property', sortOrder: 80 },
+  { slug: 'tax-payable', name: 'Tax Payable', sortOrder: 90 },
+  { slug: 'other-liability', name: 'Other Liability', sortOrder: 999 },
+]
+
 async function seedDomain(label: string, rows: SeedRow[], upsert: (r: SeedRow) => Promise<unknown>) {
   let created = 0
   for (const row of rows) {
@@ -137,6 +219,46 @@ async function main() {
 
   await seedDomain('account_types', ACCOUNT_TYPES, (r) =>
     prisma.masterDataAccountType.upsert({
+      where: { slug: r.slug },
+      update: { sortOrder: r.sortOrder },
+      create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },
+    }),
+  )
+
+  await seedDomain('urgency_levels', URGENCY_LEVELS, (r) =>
+    prisma.masterDataUrgencyLevel.upsert({
+      where: { slug: r.slug },
+      update: { sortOrder: r.sortOrder },
+      create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },
+    }),
+  )
+
+  await seedDomain('income_categories', INCOME_CATEGORIES, (r) =>
+    prisma.masterDataIncomeCategory.upsert({
+      where: { slug: r.slug },
+      update: { sortOrder: r.sortOrder },
+      create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },
+    }),
+  )
+
+  await seedDomain('expense_categories', EXPENSE_CATEGORIES, (r) =>
+    prisma.masterDataExpenseCategory.upsert({
+      where: { slug: r.slug },
+      update: { sortOrder: r.sortOrder },
+      create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },
+    }),
+  )
+
+  await seedDomain('asset_types', ASSET_TYPES, (r) =>
+    prisma.masterDataAssetType.upsert({
+      where: { slug: r.slug },
+      update: { sortOrder: r.sortOrder },
+      create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },
+    }),
+  )
+
+  await seedDomain('liability_types', LIABILITY_TYPES, (r) =>
+    prisma.masterDataLiabilityType.upsert({
       where: { slug: r.slug },
       update: { sortOrder: r.sortOrder },
       create: { slug: r.slug, name: r.name, description: r.description, sortOrder: r.sortOrder },

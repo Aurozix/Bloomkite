@@ -34,6 +34,36 @@ const DOMAIN_LOADERS: Record<string, () => Promise<Array<{ id: string; slug: str
       select: { id: true, slug: true, name: true, sortOrder: true },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     }),
+  'urgency-levels': () =>
+    prisma.masterDataUrgencyLevel.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+  'income-categories': () =>
+    prisma.masterDataIncomeCategory.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+  'expense-categories': () =>
+    prisma.masterDataExpenseCategory.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+  'asset-types': () =>
+    prisma.masterDataAssetType.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+  'liability-types': () =>
+    prisma.masterDataLiabilityType.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, name: true, sortOrder: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
 }
 
 // Lists active master-data rows for a given domain. Auth-required since this

@@ -17,13 +17,19 @@ export default function NetWorthCalculator() {
 
   const [assets, setAssets] = useState<AssetCategory[]>([
     { name: 'Savings Account', amount: 500000 },
-    { name: 'Mutual Funds', amount: 200000 },
+    { name: 'Mutual Funds (Holdings)', amount: 200000 },
   ])
   const [liabilities, setLiabilities] = useState<LiabilityCategory[]>([
     { name: 'Home Loan', amount: 1000000 },
   ])
 
   const [results, setResults] = useState<NetWorthCalculatorResult | null>(null)
+
+  // BRD §9 master-data: asset / liability type catalogs feed the per-row
+  // datalist suggestions. Free-text remains supported so existing saved
+  // plans load unchanged.
+  const [assetTypes, setAssetTypes] = useState<string[]>([])
+  const [liabilityTypes, setLiabilityTypes] = useState<string[]>([])
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -37,6 +43,23 @@ export default function NetWorthCalculator() {
         }
 
         setUser(data.user)
+
+        try {
+          const [aResp, lResp] = await Promise.all([
+            fetch('/api/master-data/asset-types'),
+            fetch('/api/master-data/liability-types'),
+          ])
+          if (aResp.ok) {
+            const j = await aResp.json()
+            setAssetTypes((j.data ?? []).map((r: { name: string }) => r.name))
+          }
+          if (lResp.ok) {
+            const j = await lResp.json()
+            setLiabilityTypes((j.data ?? []).map((r: { name: string }) => r.name))
+          }
+        } catch {
+          // Silent: datalists become empty; free-text still works.
+        }
       } catch (error) {
         console.error('Session error:', error)
         router.push('/auth/signin')
@@ -156,17 +179,24 @@ export default function NetWorthCalculator() {
         <div className="card p-8 mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Assets</h2>
 
+          <datalist id="asset-type-suggestions">
+            {assetTypes.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+
           {assets.map((asset, index) => (
             <div key={index} className="flex gap-4 mb-4">
               <input
                 type="text"
+                list="asset-type-suggestions"
                 value={asset.name}
                 onChange={(e) => {
                   const updated = [...assets]
                   updated[index].name = e.target.value
                   setAssets(updated)
                 }}
-                placeholder="Asset name"
+                placeholder="Asset type"
                 className="input-modern flex-1"
               />
               <input
@@ -200,17 +230,24 @@ export default function NetWorthCalculator() {
 
           <h2 className="text-2xl font-bold text-gray-900 mb-6 mt-8">Liabilities</h2>
 
+          <datalist id="liability-type-suggestions">
+            {liabilityTypes.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+
           {liabilities.map((liability, index) => (
             <div key={index} className="flex gap-4 mb-4">
               <input
                 type="text"
+                list="liability-type-suggestions"
                 value={liability.name}
                 onChange={(e) => {
                   const updated = [...liabilities]
                   updated[index].name = e.target.value
                   setLiabilities(updated)
                 }}
-                placeholder="Liability name"
+                placeholder="Liability type"
                 className="input-modern flex-1"
               />
               <input

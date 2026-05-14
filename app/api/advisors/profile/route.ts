@@ -49,12 +49,24 @@ export async function GET(request: NextRequest) {
       where: { userId: user.id },
     })
 
-    const expertiseRows = await prisma.advisorExpertise.findMany({
-      where: { userId: user.id },
-      select: { specialization: true },
-    })
-
-    const expertise = expertiseRows.map((r) => r.specialization)
+    // Derive expertise from declared services (§9 master-data migration).
+    // Legacy free-text rows in AdvisorExpertise are unioned in until the
+    // table is dropped in a follow-up cleanup commit.
+    const [serviceRows, legacyRows] = await Promise.all([
+      prisma.advisorService.findMany({
+        where: { userId: user.id },
+        orderBy: { priority: 'asc' },
+        include: { service: { select: { name: true } } },
+      }),
+      prisma.advisorExpertise.findMany({
+        where: { userId: user.id },
+        select: { specialization: true },
+      }),
+    ])
+    const expertiseSet = new Set<string>()
+    for (const r of serviceRows) expertiseSet.add(r.service.name)
+    for (const r of legacyRows) expertiseSet.add(r.specialization)
+    const expertise = Array.from(expertiseSet)
 
     return NextResponse.json({
       success: true,
@@ -136,28 +148,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
     }
 
-    // Optionally sync expertise tags. Pass `expertise: string[]` to replace
-    // the advisor's full tag set; omit the field to leave it untouched.
-    if (Array.isArray(expertise)) {
-      const cleaned = expertise
-        .map((s: unknown) => (typeof s === 'string' ? s.trim() : ''))
-        .filter((s) => s.length > 0)
-
-      try {
-        await prisma.advisorExpertise.deleteMany({ where: { userId: user.id } })
-        if (cleaned.length > 0) {
-          await prisma.advisorExpertise.createMany({
-            data: cleaned.map((specialization) => ({
-              userId: user.id,
-              specialization,
-            })),
-            skipDuplicates: true,
-          })
-        }
-      } catch (expError) {
-        console.error('Error syncing expertise:', expError)
-      }
-    }
+    // The free-text `expertise` payload field is deprecated as of the §9
+    // master-data migration. Expertise is now derived from the advisor's
+    // declared services (PUT /api/advisors/declarations). Accept the field
+    // silently for back-compat with older clients but no longer write to
+    // the AdvisorExpertise table; new tags should be created by adding the
+    // matching service to the advisor's declarations.
+    void expertise
 
     return NextResponse.json({
       success: true,

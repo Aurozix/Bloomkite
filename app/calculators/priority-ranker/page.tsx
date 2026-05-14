@@ -7,6 +7,26 @@ import { Goal, RankedGoal } from '@/lib/calculators/types'
 import { useToast } from '@/app/components/toast-context'
 import { TrashIcon } from '@heroicons/react/24/outline'
 
+interface UrgencyOption {
+  level: number
+  label: string
+}
+
+// Fallback used while the API is loading or if the master-data fetch fails.
+// Mirrors the seed in database/seed-master-data.ts so the page never lands
+// in a state with an empty dropdown.
+const FALLBACK_URGENCY: UrgencyOption[] = [
+  { level: 1, label: 'Critical' },
+  { level: 2, label: 'Very Important' },
+  { level: 3, label: 'Important' },
+  { level: 4, label: 'To Be Deleted' },
+  { level: 5, label: 'Moderate' },
+  { level: 6, label: 'Low' },
+  { level: 7, label: 'Very Low' },
+  { level: 8, label: 'Minor' },
+  { level: 9, label: 'Least Urgent' },
+]
+
 export default function PriorityRanker() {
   const router = useRouter()
   const { addToast } = useToast()
@@ -21,6 +41,7 @@ export default function PriorityRanker() {
   ])
 
   const [results, setResults] = useState<RankedGoal[] | null>(null)
+  const [urgencyOptions, setUrgencyOptions] = useState<UrgencyOption[]>(FALLBACK_URGENCY)
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -34,6 +55,23 @@ export default function PriorityRanker() {
         }
 
         setUser(data.user)
+
+        // Lazy-load the urgency labels from master-data. Slug 'urgency-N'
+        // encodes the level; sortOrder is the canonical level number.
+        try {
+          const r = await fetch('/api/master-data/urgency-levels')
+          if (r.ok) {
+            const json = await r.json()
+            const rows = (json.data ?? []) as Array<{ slug: string; name: string; sortOrder: number }>
+            if (rows.length > 0) {
+              setUrgencyOptions(
+                rows.map((row) => ({ level: row.sortOrder, label: row.name }))
+              )
+            }
+          }
+        } catch {
+          // Silent fall-through to FALLBACK_URGENCY.
+        }
       } catch (error) {
         console.error('Session error:', error)
         router.push('/auth/signin')
@@ -49,9 +87,12 @@ export default function PriorityRanker() {
     try {
       setCalculating(true)
 
-      const result = rankGoals({
-        goals,
-      })
+      // Build a label map from the master-data fetch so the result rows
+      // render the admin-edited names (not the hard-coded defaults).
+      const labelMap: Record<number, string> = {}
+      for (const opt of urgencyOptions) labelMap[opt.level] = opt.label
+
+      const result = rankGoals({ goals }, labelMap)
 
       setResults(result)
 
@@ -168,11 +209,11 @@ export default function PriorityRanker() {
                   updated[index].urgencyLevel = parseInt(e.target.value)
                   setGoals(updated)
                 }}
-                className="input-modern w-28"
+                className="input-modern w-64"
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((level) => (
-                  <option key={level} value={level}>
-                    {level === 4 ? '4 (Delete)' : level}
+                {urgencyOptions.map((opt) => (
+                  <option key={opt.level} value={opt.level}>
+                    {opt.level}. {opt.label}
                   </option>
                 ))}
               </select>

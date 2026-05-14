@@ -72,11 +72,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       where: { userId: advisorId, status: 'approved' },
     })
 
-    // Fetch expertise
-    const expertise = await prisma.advisorExpertise.findMany({
-      where: { userId: advisorId },
-      select: { specialization: true },
-    })
+    // Expertise is now derived from AdvisorService → MasterDataService.name
+    // (§9 master-data migration). Legacy free-text rows in AdvisorExpertise
+    // are unioned in until that table is dropped.
+    const [serviceRows, legacyRows] = await Promise.all([
+      prisma.advisorService.findMany({
+        where: { userId: advisorId },
+        orderBy: { priority: 'asc' },
+        include: { service: { select: { name: true } } },
+      }),
+      prisma.advisorExpertise.findMany({
+        where: { userId: advisorId },
+        select: { specialization: true },
+      }),
+    ])
+    const expertiseSet = new Set<string>()
+    for (const r of serviceRows) expertiseSet.add(r.service.name)
+    for (const r of legacyRows) expertiseSet.add(r.specialization)
+    const expertise = Array.from(expertiseSet).map((name) => ({ specialization: name }))
 
     // Fetch follower count
     const followerCount = await prisma.advisorFollower.count({

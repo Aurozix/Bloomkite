@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§8 Admin fully green — user delete + master-data CRUD + plans editor + forum moderation + audit-log viewer + bulk article moderation; two new master-data domains landed for §9)
+**Last Updated**: 2026-05-13 (§9 Master-data fully green — all calculator + advisor-side reference data now DB-driven and admin-editable; risk profiler questionnaire moved out of code)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -185,17 +185,17 @@ BRD repeatedly references master-data tables. Status:
 
 - ✅ Investment categories (BRD §3.1 step 4) — `master_data_investment_categories`, 10 rows seeded
 - ✅ Products (BRD §3.2 step 5) — `master_data_products`, 11 rows seeded
-- ✅ Services (BRD §3.2 step 5) — `master_data_services`, 10 rows seeded
+- ✅ Services (BRD §3.2 step 5) — `master_data_services`, 10 rows seeded — also serves as the canonical source for advisor "expertise" tags (legacy `advisor_expertise` table deprecated, reads union the two for back-compat)
 - ✅ Brands (BRD §3.2 step 5) — `master_data_brands`, 15 rows seeded
 - ✅ Account types (BRD §3.1 step 5) — `master_data_account_types`, 12 rows seeded
-- ✅ Urgency levels (1–9) for Priority Ranker — `master_data_urgency_levels` (table only; calculator wiring is a follow-up)
+- ✅ Urgency levels (1–9) for Priority Ranker — `master_data_urgency_levels`, 9 rows seeded; calculator UI + lib both wired to read from the table
 - ✅ Calculator categories — `master_data_calculator_categories` (table only; catalog page wiring is a follow-up)
-- ❌ Cash-flow item categories
-- ❌ Net-worth account-entry types
-- ❌ Risk-profile questions/answers/point values (logic exists but not DB-driven)
-- ❌ Advisor types / specializations taxonomy
+- ✅ Cash-flow income + expense categories — `master_data_income_categories` (9 rows) + `master_data_expense_categories` (17 rows); Cash Flow calculator inputs now backed by datalist suggestions, free-text still supported for back-compat
+- ✅ Net-worth asset + liability types — `master_data_asset_types` (15 rows) + `master_data_liability_types` (10 rows); Net Worth calculator inputs wired with the same datalist pattern
+- ✅ Risk-profile questions / answers / point values — `risk_profile_questions` (17 rows incl. conditional Q3.1) + `risk_profile_answers`. Calculator scoring algorithm unchanged (`maxScoreForInversion` stored per-row preserves Q3's special max=0). [GET /api/calculators/risk-profiler/questions](../../app/api/calculators/risk-profiler/questions/route.ts) feeds the page; FALLBACK_QUESTIONS array kept for graceful degradation
+- ❌ Advisor types / specializations taxonomy (covered de-facto by services; a dedicated taxonomy is a separate scope decision)
 
-Seven of nine master-data domains landed. **Admin CRUD UI is now live at [/admin/master-data](../../app/admin/master-data/page.tsx)** with create / inline-edit / soft-deactivate / reactivate across every domain via a single dispatcher route. Slugs are immutable from the UI (code may hard-code them). The seed script remains the bootstrap entry point; the admin UI is for ongoing maintenance.
+**All BRD-tracked master-data domains now landed**. 11 master-data tables in total (10 generic + risk-profile question/answer pair). Admin CRUD UI at [/admin/master-data](../../app/admin/master-data/page.tsx) now exposes all 11 generic domains via the single dispatcher (risk-profile Q&A managed via the seed script for now — admin UI for question editing is a separate scope). Slugs are immutable from the UI (code may hard-code them). The seed script remains the bootstrap entry point.
 
 ---
 
@@ -288,6 +288,16 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §9 Master-data — all five remaining sub-tasks ❌ → ✅. The calculator + advisor surfaces are now fully DB-driven and admin-editable; the only hard-coded fallbacks are graceful-degradation defaults that match the seed.
+  - **Schema** (migration `20260514034652_reference_data_extensions`): six new tables. Four follow the existing master-data shape (slug+name+description+sortOrder+isActive) and slot into the dispatcher: `master_data_income_categories`, `master_data_expense_categories`, `master_data_asset_types`, `master_data_liability_types`. Two are bespoke for the risk-profile questionnaire: `risk_profile_questions` (with `questionNumber` Decimal preserving the existing 3.1 conditional, `maxScoreForInversion` Int preserving Q3's binary max=0, optional self-FK + answer-score for conditional rendering) and `risk_profile_answers`.
+  - **Seed** ([`database/seed-master-data.ts`](../../database/seed-master-data.ts)): extended with urgency-levels (9), income (9), expense (17), assets (15), liabilities (10) — total 60 new rows. New [`database/seed-risk-profile.ts`](../../database/seed-risk-profile.ts) seeds 17 questions + their answer sets via two-pass insert (questions first, conditional FKs second) and is fully idempotent (upsert by slug; answers re-created in lockstep so wording edits propagate).
+  - **Public read endpoint** ([/api/master-data/:domain](../../app/api/master-data/[domain]/route.ts)) extended with the 6 new domains (`urgency-levels`, `income-categories`, `expense-categories`, `asset-types`, `liability-types`). Admin dispatcher registry in [`lib/admin-master-data.ts`](../../lib/admin-master-data.ts) likewise extended — admin CRUD UI now serves all 11 generic master-data domains automatically.
+  - **Priority Ranker wiring** (BRD §3.2 / §4): [page](../../app/calculators/priority-ranker/page.tsx) fetches urgency labels from `urgency-levels` master-data and passes them through `rankGoals(input, urgencyLabels)` so result rows render the admin-edited names. `urgencyLabels` defaults to the seed values for back-compat with existing tests + scripts.
+  - **Risk Profiler** (BRD §6.3 / Calculators §6): [GET /api/calculators/risk-profiler/questions](../../app/api/calculators/risk-profiler/questions/route.ts) returns the active questionnaire with conditional metadata. [Page](../../app/calculators/risk-profiler/page.tsx) hydrates `questions` state from the API; falls back to the in-file seed if the fetch fails (so the calculator never blocks on master-data loading). Scoring algorithm in [`lib/calculators/riskProfiler.ts`](../../lib/calculators/riskProfiler.ts) unchanged — same `(questionNumber, answerScore)` consumption — so the existing 32 unit tests still pass.
+  - **Cash Flow + Net Worth wiring** (BRD §2.5 / §3.3): both calculators now render an HTML5 `<datalist>` per row populated from master-data, surfacing curated category names while preserving free-text input. Existing saved plans with arbitrary names load unchanged — no migration of stored `inputs` JSON required. Pattern: free-text + datalist beats forced dropdown because (a) zero migration risk, (b) lets users record categories not yet in master-data, (c) admin can add the missing one later and the autocomplete picks it up.
+  - **Advisor expertise migration**: legacy `advisor_expertise` (free-text specialization tags) is now superseded by `advisor_services` → `master_data_services` for canonical expertise tags. The three reading routes ([search](../../app/api/advisors/search/route.ts), [advisor detail](../../app/api/advisors/[id]/route.ts), [own profile](../../app/api/advisors/profile/route.ts)) now derive expertise from declared services; the legacy table is unioned in for back-compat until a follow-up cleanup commit drops it. The PUT route's `expertise: string[]` payload field is now silently ignored; new tags come via the existing services-declarations endpoint.
+  - **Admin UI bonus**: with the registry extension, the existing [/admin/master-data](../../app/admin/master-data/page.tsx) UI from §8 automatically picks up all four new generic domains — no UI changes needed.
+  - Verified: type-check clean, 278/278 unit tests pass.
 - **2026-05-13** — §8 Admin — 6 of 6 remaining capabilities ❌ → ✅ (BRD §8.5, §13.2 audit; full admin operations surface).
   - **Schema** (migration `20260514030740_admin_master_data_extensions`): two new master-data tables `master_data_urgency_levels` (Priority Ranker 1..9 scale) and `master_data_calculator_categories`. Both follow the same shape as the other five domains. `lib/admin-master-data.ts` registry maps domain slug → Prisma delegate so a single dispatcher route serves all seven CRUD endpoints. `lib/admin-audit.ts` AdminAuditAction union + targetType union extended with the new admin verbs (`user.delete`, `master_data.*`, `plan.*`, `forum.*`, `article.bulk_*`).
   - **User management**: existing list/detail/disable/role-toggle stayed. Added [DELETE /api/admin/users/:id](../../app/api/admin/users/[id]/route.ts) with last-admin guard, self-delete guard, and audit-write BEFORE the cascade so the trail survives. UI gained a "Danger zone" card with type-the-email confirm.

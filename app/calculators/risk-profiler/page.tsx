@@ -16,7 +16,11 @@ interface Question {
   conditionCheckValue?: number
 }
 
-const questions: Question[] = [
+// Fallback only used if the master-data API fetch fails. The canonical
+// source is now risk_profile_questions / risk_profile_answers (BRD §6.3 /
+// Calculators §6 — DB-driven questionnaire). database/seed-risk-profile.ts
+// owns the seed and is the single source of truth.
+const FALLBACK_QUESTIONS: Question[] = [
   {
     number: 1,
     text: 'In comparison to your peer groups, how would you rate your willingness to take risk while making financial decisions?',
@@ -206,6 +210,7 @@ export default function RiskProfiler() {
   const [answers, setAnswers] = useState<Map<number, number>>(new Map())
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [results, setResults] = useState<RiskProfilerResult | null>(null)
+  const [questions, setQuestions] = useState<Question[]>(FALLBACK_QUESTIONS)
 
   // Filter questions to show only non-conditional or those where condition is met
   const visibleQuestions = questions.filter((q) => {
@@ -230,6 +235,37 @@ export default function RiskProfiler() {
         }
 
         setUser(data.user)
+
+        // Load DB-driven questions. Silent fall-through to FALLBACK_QUESTIONS
+        // on failure — calculator must never block on master-data loading.
+        try {
+          const r = await fetch('/api/calculators/risk-profiler/questions')
+          if (r.ok) {
+            const json = await r.json()
+            type ApiQuestion = {
+              questionNumber: number
+              text: string
+              options: { score: number; label: string }[]
+              conditional: { onQuestionNumber: number; onAnswerScore: number | null } | null
+            }
+            const apiQs: ApiQuestion[] = json.questions ?? []
+            if (apiQs.length > 0) {
+              setQuestions(
+                apiQs.map((q): Question => ({
+                  number: q.questionNumber,
+                  text: q.text,
+                  options: q.options,
+                  conditional: q.conditional ? true : undefined,
+                  conditionCheckFor: q.conditional?.onQuestionNumber,
+                  conditionCheckValue:
+                    q.conditional?.onAnswerScore ?? undefined,
+                })),
+              )
+            }
+          }
+        } catch {
+          // Silent fall-through.
+        }
       } catch (error) {
         console.error('Session error:', error)
         router.push('/auth/signin')

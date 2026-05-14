@@ -328,6 +328,133 @@ model MasterDataCalculatorCategory {
   @@map("master_data_calculator_categories")
 }
 
+// ============================================================================
+// Risk-profile questionnaire (BRD §6.3 / Calculators §6)
+// ============================================================================
+//
+// The Risk Profiler calculator was hard-coded into the page + library.
+// Moving it here lets an admin tweak wording, add/remove questions, or
+// reweight scoring without a deploy. The runtime logic stays the same —
+// existing scoring algorithm in lib/calculators/riskProfiler.ts is fed the
+// same `(questionNumber, answerScore)` pairs, just sourced from the DB.
+//
+// `questionNumber` is a Decimal so we preserve the existing 3.1 conditional
+// (Q3.1 only renders when Q3 = "Yes"). `maxScoreForInversion` is part of
+// the canonical algorithm — most questions have max=5 but Q3 (binary) is
+// 0 and Q6 (six options) is 6. Stored per-question rather than computed at
+// runtime because Q3's answers are both score=0, which would yield
+// max=0 from a runtime aggregation and break the inversion.
+
+model RiskProfileQuestion {
+  id                       String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug                     String   @unique @db.VarChar(80)
+  questionNumber           Decimal  @map("question_number") @db.Decimal(4, 2)
+  text                     String
+  maxScoreForInversion     Int      @map("max_score_for_inversion")
+  sortOrder                Int      @default(0) @map("sort_order")
+  isActive                 Boolean  @default(true) @map("is_active")
+  /// FK to another question. When set, this question only renders if the
+  /// referenced question's selected answer matches `conditionalOnAnswerScore`.
+  conditionalOnQuestionId  String?  @map("conditional_on_question_id") @db.Uuid
+  conditionalOnAnswerScore Int?     @map("conditional_on_answer_score")
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  conditionalOnQuestion RiskProfileQuestion?  @relation("RiskProfileConditionalOn", fields: [conditionalOnQuestionId], references: [id], onDelete: SetNull)
+  conditionedQuestions  RiskProfileQuestion[] @relation("RiskProfileConditionalOn")
+  answers               RiskProfileAnswer[]
+
+  @@index([sortOrder, questionNumber], map: "idx_risk_q_order")
+  @@map("risk_profile_questions")
+}
+
+/// Multiple-choice answer for a risk-profile question. `score` is the raw
+/// score the existing calculator inversion algorithm consumes (low score =
+/// aggressive in raw form; the calculator inverts so high adjusted = aggressive).
+model RiskProfileAnswer {
+  id         String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  text       String
+  score      Int
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  question RiskProfileQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, sortOrder], map: "idx_risk_a_order")
+  @@map("risk_profile_answers")
+}
+
+/// Cash-flow income categories (BRD §2.5, Calculators §2). Salary, Business
+/// Income, Rental, Dividends, etc. Drives the picker on the Cash Flow
+/// calculator's income-items section.
+model MasterDataIncomeCategory {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_income_cat_order")
+  @@map("master_data_income_categories")
+}
+
+/// Cash-flow expense categories (BRD §2.5, Calculators §2). Rent,
+/// Groceries, Utilities, EMI, Insurance Premium, etc. Drives the picker on
+/// the Cash Flow calculator's expense-items section.
+model MasterDataExpenseCategory {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_expense_cat_order")
+  @@map("master_data_expense_categories")
+}
+
+/// Net-worth asset types (BRD §3.3, Calculators §3). Savings Account, Mutual
+/// Funds, Real Estate, Gold, etc. Drives the picker on the Net Worth
+/// calculator's assets section.
+model MasterDataAssetType {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_asset_type_order")
+  @@map("master_data_asset_types")
+}
+
+/// Net-worth liability types (BRD §3.3, Calculators §3). Home Loan, Car
+/// Loan, Personal Loan, Credit Card Outstanding, etc. Drives the picker on
+/// the Net Worth calculator's liabilities section.
+model MasterDataLiabilityType {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_liability_type_order")
+  @@map("master_data_liability_types")
+}
+
 /// Account types an investor can declare in onboarding (BRD §3.1 step 5).
 /// Bank Savings, Brokerage, Mutual Funds, PPF, EPF, NPS, Insurance.
 /// We deliberately capture only WHICH types the investor holds, not balances
@@ -578,6 +705,12 @@ model AdvisorCredential {
   @@map("advisor_credentials")
 }
 
+/// DEPRECATED — superseded by AdvisorService (FK to MasterDataService) as
+/// of the §9 master-data migration. Retained so existing rows aren't lost in
+/// a destructive change. New code derives "expertise" tags from
+/// AdvisorService → MasterDataService.name. Stop writing to this table; it
+/// will be dropped in a follow-up cleanup commit once we confirm no consumer
+/// depends on the free-text data.
 model AdvisorExpertise {
   id             String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   userId         String    @map("user_id") @db.Uuid

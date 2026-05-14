@@ -1,6 +1,9 @@
 import { PriorityRankerInput, RankedGoal } from './types'
 
-const urgencyDescriptions: Record<number, string> = {
+// Default urgency labels — match the master-data seed (urgency_levels table).
+// The page passes `urgencyLabels` from the API at runtime; this fallback only
+// applies when callers (existing tests, scripts) don't pass one through.
+const DEFAULT_URGENCY_LABELS: Record<number, string> = {
   1: 'Critical',
   2: 'Very Important',
   3: 'Important',
@@ -12,7 +15,10 @@ const urgencyDescriptions: Record<number, string> = {
   9: 'Least Urgent',
 }
 
-export function rankGoals(input: PriorityRankerInput): RankedGoal[] {
+export function rankGoals(
+  input: PriorityRankerInput,
+  urgencyLabels: Record<number, string> = DEFAULT_URGENCY_LABELS,
+): RankedGoal[] {
   // Filter out goals with urgency level 4 (marked for deletion)
   const validGoals = input.goals.filter((goal) => goal.urgencyLevel !== 4)
 
@@ -44,7 +50,7 @@ export function rankGoals(input: PriorityRankerInput): RankedGoal[] {
         priority,
         name: goal.name,
         urgencyLevel: goal.urgencyLevel,
-        urgencyDescription: urgencyDescriptions[urgency] || `Urgency ${urgency}`,
+        urgencyDescription: urgencyLabels[urgency] || `Urgency ${urgency}`,
       })
       priority++
     }

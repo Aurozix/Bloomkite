@@ -24,10 +24,16 @@ export default function CashFlowAnalyzer() {
     { name: 'Salary', amount: 75000 },
   ])
   const [expenseItems, setExpenseItems] = useState<CashFlowItem[]>([
-    { name: 'Rent', amount: 20000 },
+    { name: 'Rent / Mortgage', amount: 20000 },
     { name: 'Groceries', amount: 10000 },
-    { name: 'Utilities', amount: 3000 },
+    { name: 'Utilities (Electricity, Water, Gas)', amount: 3000 },
   ])
+
+  // Master-data category lists (BRD §9). Used to populate the per-row
+  // datalist suggestions; users can still free-type so existing saved plans
+  // with arbitrary names keep working unchanged.
+  const [incomeCategories, setIncomeCategories] = useState<string[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([])
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -39,6 +45,23 @@ export default function CashFlowAnalyzer() {
           return
         }
         setUser(data.user)
+
+        try {
+          const [incResp, expResp] = await Promise.all([
+            fetch('/api/master-data/income-categories'),
+            fetch('/api/master-data/expense-categories'),
+          ])
+          if (incResp.ok) {
+            const j = await incResp.json()
+            setIncomeCategories((j.data ?? []).map((r: { name: string }) => r.name))
+          }
+          if (expResp.ok) {
+            const j = await expResp.json()
+            setExpenseCategories((j.data ?? []).map((r: { name: string }) => r.name))
+          }
+        } catch {
+          // Silent: datalists become empty; free-text still works.
+        }
       } catch (error) {
         console.error('Session error:', error)
         router.push('/auth/signin')
@@ -137,6 +160,8 @@ export default function CashFlowAnalyzer() {
               setItems={setIncomeItems}
               addLabel="Add income source"
               namePlaceholder="e.g., Salary, Freelance"
+              categories={incomeCategories}
+              datalistId="income-cat-suggestions"
             />
 
             <ItemSection
@@ -145,6 +170,8 @@ export default function CashFlowAnalyzer() {
               setItems={setExpenseItems}
               addLabel="Add expense"
               namePlaceholder="e.g., Rent, Groceries"
+              categories={expenseCategories}
+              datalistId="expense-cat-suggestions"
             />
           </div>
 
@@ -222,22 +249,36 @@ function ItemSection({
   setItems,
   addLabel,
   namePlaceholder,
+  categories,
+  datalistId,
 }: {
   title: string
   items: CashFlowItem[]
   setItems: (next: CashFlowItem[]) => void
   addLabel: string
   namePlaceholder: string
+  categories: string[]
+  datalistId: string
 }) {
   return (
     <div className="bg-paper border border-ink-200 rounded-bk-lg p-6 shadow-bk-sm">
       <h2 className="font-serif text-xl text-ink-900 mb-4">{title}</h2>
+
+      {/* Master-data suggestions per BRD §9. Datalist gives a dropdown of
+          curated category names while still allowing free-text — existing
+          saved plans with arbitrary names load unchanged. */}
+      <datalist id={datalistId}>
+        {categories.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
 
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={index} className="flex gap-2 items-stretch">
             <input
               type="text"
+              list={datalistId}
               value={item.name}
               onChange={(e) => {
                 const updated = [...items]

@@ -112,17 +112,34 @@ export async function GET(request: NextRequest) {
       prisma.advisorProfile.count({ where: where as never }),
     ])
 
-    // Batch-fetch expertise for the visible advisors. One query.
+    // Batch-fetch expertise for the visible advisors. As of the §9 master-
+    // data migration, "expertise tags" are derived from the advisor's
+    // declared services (FK references to MasterDataService) rather than the
+    // legacy free-text AdvisorExpertise table. The two queries are unioned
+    // so any advisor still carrying free-text rows (pre-migration data) keeps
+    // their tags visible until the table is dropped.
     const userIds = advisors.map((a) => a.userId).filter(Boolean)
     const expertiseByUser = new Map<string, string[]>()
     if (userIds.length > 0) {
-      const expertiseRows = await prisma.advisorExpertise.findMany({
-        where: { userId: { in: userIds } },
-        select: { userId: true, specialization: true },
-      })
-      for (const row of expertiseRows) {
+      const [serviceRows, legacyRows] = await Promise.all([
+        prisma.advisorService.findMany({
+          where: { userId: { in: userIds } },
+          orderBy: { priority: 'asc' },
+          include: { service: { select: { name: true } } },
+        }),
+        prisma.advisorExpertise.findMany({
+          where: { userId: { in: userIds } },
+          select: { userId: true, specialization: true },
+        }),
+      ])
+      for (const row of serviceRows) {
         const arr = expertiseByUser.get(row.userId) ?? []
-        arr.push(row.specialization)
+        if (!arr.includes(row.service.name)) arr.push(row.service.name)
+        expertiseByUser.set(row.userId, arr)
+      }
+      for (const row of legacyRows) {
+        const arr = expertiseByUser.get(row.userId) ?? []
+        if (!arr.includes(row.specialization)) arr.push(row.specialization)
         expertiseByUser.set(row.userId, arr)
       }
     }
