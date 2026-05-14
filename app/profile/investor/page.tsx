@@ -29,6 +29,13 @@ export default function InvestorProfilePage() {
   const [pincode, setPincode] = useState('')
   const [riskProfile, setRiskProfile] = useState<string | null>(null)
 
+  // BRD §3.1 step 4 — investment interests. Categories the investor wants to
+  // explore. M:N to master_data_investment_categories.
+  type CategoryRow = { id: string; slug: string; name: string }
+  const [interestsCatalog, setInterestsCatalog] = useState<CategoryRow[]>([])
+  const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([])
+  const [savingInterests, setSavingInterests] = useState(false)
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -46,9 +53,14 @@ export default function InvestorProfilePage() {
           return
         }
 
-        const profileResp = await fetch('/api/investors/profile')
-        if (profileResp.ok) {
-          const { data } = await profileResp.json()
+        const [profileResp, catalogResp, interestsResp] = await Promise.allSettled([
+          fetch('/api/investors/profile'),
+          fetch('/api/master-data/investment-categories'),
+          fetch('/api/investors/interests'),
+        ])
+
+        if (profileResp.status === 'fulfilled' && profileResp.value.ok) {
+          const { data } = await profileResp.value.json()
           if (data) {
             setDisplayName(data.display_name || '')
             setBio(data.bio || '')
@@ -61,6 +73,16 @@ export default function InvestorProfilePage() {
             setRiskProfile(data.risk_profile || null)
           }
         }
+        if (catalogResp.status === 'fulfilled' && catalogResp.value.ok) {
+          const j = await catalogResp.value.json()
+          setInterestsCatalog(j.data || [])
+        }
+        if (interestsResp.status === 'fulfilled' && interestsResp.value.ok) {
+          const j = await interestsResp.value.json()
+          setSelectedInterestIds(
+            (j.data || []).map((r: { categoryId: string }) => r.categoryId),
+          )
+        }
       } catch (err) {
         console.error('Error loading investor profile:', err)
         addToast('Error loading profile', 'error')
@@ -71,6 +93,31 @@ export default function InvestorProfilePage() {
 
     fetchProfile()
   }, [router, addToast])
+
+  const handleSaveInterests = async () => {
+    setSavingInterests(true)
+    try {
+      const resp = await fetch('/api/investors/interests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds: selectedInterestIds }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}))
+        addToast(data.error || 'Failed to save interests', 'error')
+        return
+      }
+      addToast('Investment interests saved', 'success')
+    } finally {
+      setSavingInterests(false)
+    }
+  }
+
+  const toggleInterest = (id: string) => {
+    setSelectedInterestIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -233,6 +280,56 @@ export default function InvestorProfilePage() {
             className="btn-primary w-full py-3 text-lg disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Profile'}
+          </button>
+        </section>
+
+        {/* BRD §3.1 step 4 — Investment interests */}
+        <section className="card p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Investment Interests</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            Pick the categories you want to explore. We&apos;ll use these to surface
+            relevant advisors and articles. No ranking — every selection is equally
+            interesting.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-2 mb-6">
+            {interestsCatalog.map((row) => {
+              const checked = selectedInterestIds.includes(row.id)
+              return (
+                <label
+                  key={row.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border-2 cursor-pointer transition ${
+                    checked
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleInterest(row.id)}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-gray-900 font-medium">{row.name}</span>
+                </label>
+              )
+            })}
+          </div>
+
+          {interestsCatalog.length === 0 && (
+            <p className="text-sm text-gray-500 italic mb-6">
+              No investment categories available yet. Master data needs to be seeded.
+            </p>
+          )}
+
+          <button
+            onClick={handleSaveInterests}
+            disabled={savingInterests}
+            className="btn-primary w-full md:w-auto px-6 py-3"
+          >
+            {savingInterests
+              ? 'Saving...'
+              : `Save ${selectedInterestIds.length} selected`}
           </button>
         </section>
 

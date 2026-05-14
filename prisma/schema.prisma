@@ -142,7 +142,6 @@ model EmailVerificationOtp {
 
 /// Investment categories for investor profile interest declaration
 /// (BRD §3.1 step 4). Equity, MF, Insurance, Fixed Income, etc.
-/// Back-relation to the join model is added in the investor-interests commit.
 model MasterDataInvestmentCategory {
   id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   slug        String   @unique @db.VarChar(80)
@@ -153,8 +152,24 @@ model MasterDataInvestmentCategory {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  investorInterests InvestorInvestmentInterest[]
+
   @@index([sortOrder, name], map: "idx_md_inv_cat_order")
   @@map("master_data_investment_categories")
+}
+
+/// Investor ↔ investment categories M:N. BRD §3.1 step 4. No priority — every
+/// declared category is "interested in" with equal weight.
+model InvestorInvestmentInterest {
+  userId     String   @map("user_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  category MasterDataInvestmentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, categoryId])
+  @@index([userId], map: "idx_investor_interest_user")
+  @@map("investor_investment_interests")
 }
 
 /// Products an advisor can offer (BRD §3.2 step 5). Mutual Funds, Insurance,
