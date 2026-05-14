@@ -22,26 +22,26 @@ datasource db {
 /// disabledAt is set when an admin soft-disables the account; the signIn
 /// callback in auth.ts blocks any sign-in attempt while it's non-null.
 model User {
-  id            String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
-  email         String    @unique @db.VarChar(255)
-  name          String?   @map("full_name") @db.VarChar(255)
-  image         String?   @map("avatar_url")
-  emailVerified DateTime? @map("email_verified") @db.Timestamp(6)
-  passwordHash  String?   @map("password_hash") @db.VarChar(255)
+  id              String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  email           String    @unique @db.VarChar(255)
+  name            String?   @map("full_name") @db.VarChar(255)
+  image           String?   @map("avatar_url")
+  emailVerified   DateTime? @map("email_verified") @db.Timestamp(6)
+  passwordHash    String?   @map("password_hash") @db.VarChar(255)
   // BRD §8.1: Adults Only — platform requires 18+. Nullable so existing rows
   // (pre-DOB-rollout) keep working; activation paths require it before
   // creating a profile. InvestorProfile/AdvisorProfile still carry their own
   // dateOfBirth columns as denormalised copies for historical reasons.
-  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
   // BRD §8.1: Email + Phone OTP. Profile activation refuses to proceed
   // without a verified phone. `phoneNumber` is the E.164 string captured
   // during the OTP send (mirrored to the role's profile on success).
-  phoneNumber   String?   @map("phone_number") @db.VarChar(20)
+  phoneNumber     String?   @map("phone_number") @db.VarChar(20)
   phoneVerifiedAt DateTime? @map("phone_verified_at") @db.Timestamp(6)
-  disabledAt    DateTime? @map("disabled_at") @db.Timestamp(6)
-  disabledBy    String?   @map("disabled_by") @db.Uuid
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
+  disabledAt      DateTime? @map("disabled_at") @db.Timestamp(6)
+  disabledBy      String?   @map("disabled_by") @db.Uuid
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
 
   accounts            Account[]
   passwordResetTokens PasswordResetToken[]
@@ -126,6 +126,105 @@ model EmailVerificationOtp {
   @@index([email], map: "idx_email_otp_email")
   @@index([expiresAt], map: "idx_email_otp_expires")
   @@map("email_verification_otps")
+}
+
+// ============================================================================
+// Master data
+// ============================================================================
+//
+// One table per domain (per design decision 2026-05-13 — see Gap_Analysis §9).
+// Each row is a globally-stable concept that profile pages, calculators, and
+// admin search filters reference by id. `slug` is the human-stable handle
+// that code can hard-code; `name` is the display label that admins edit.
+//
+// `isActive` lets admins retire a row without breaking historical references
+// (advisor still has it on their profile, but new advisors can't pick it).
+
+/// Investment categories for investor profile interest declaration
+/// (BRD §3.1 step 4). Equity, MF, Insurance, Fixed Income, etc.
+/// Back-relation to the join model is added in the investor-interests commit.
+model MasterDataInvestmentCategory {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_inv_cat_order")
+  @@map("master_data_investment_categories")
+}
+
+/// Products an advisor can offer (BRD §3.2 step 5). Mutual Funds, Insurance,
+/// Fixed Deposits, PMS, AIF, Bonds, ULIPs.
+/// Back-relation to AdvisorProduct is added in the advisor-PSB commit.
+model MasterDataProduct {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_product_order")
+  @@map("master_data_products")
+}
+
+/// Services an advisor offers (BRD §3.2 step 5). Wealth Management,
+/// Retirement Planning, Tax Planning, Estate Planning, etc.
+/// Back-relation to AdvisorService is added in the advisor-PSB commit.
+model MasterDataService {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_service_order")
+  @@map("master_data_services")
+}
+
+/// Brands / financial institutions an advisor works with (BRD §3.2 step 5).
+/// HDFC, ICICI, SBI, Kotak, etc.
+/// Back-relation to AdvisorBrand is added in the advisor-PSB commit.
+model MasterDataBrand {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_brand_order")
+  @@map("master_data_brands")
+}
+
+/// Account types an investor can declare in onboarding (BRD §3.1 step 5).
+/// Bank Savings, Brokerage, Mutual Funds, PPF, EPF, NPS, Insurance.
+/// We deliberately capture only WHICH types the investor holds, not balances
+/// or amounts — BRD §8.5 data minimisation.
+/// Back-relation to InvestorFinancialAccount is added in the financial-accounts commit.
+model MasterDataAccountType {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_account_type_order")
+  @@map("master_data_account_types")
 }
 
 /// 6-digit OTP codes for phone verification. Same hash + attempts pattern as

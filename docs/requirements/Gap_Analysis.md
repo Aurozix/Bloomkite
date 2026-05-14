@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (Loans cluster complete; Goal Planner reviewed; §2 password-reset corrected)
+**Last Updated**: 2026-05-13 (§2 Auth/onboarding green; master-data foundation for §3 + §9 landed)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -181,18 +181,20 @@ No `plan_shares`, `plan_comments`, or `plan_recipients` tables exist. Blocks UC-
 
 ## 9. Master / reference data — completely absent
 
-BRD repeatedly references master-data tables that don't exist:
+BRD repeatedly references master-data tables. Status:
 
-- ❌ Products (Mutual Funds, Insurance, FDs, …)
-- ❌ Services (Wealth Mgmt, Retirement Planning, …)
-- ❌ Brands (financial institutions)
+- ✅ Investment categories (BRD §3.1 step 4) — `master_data_investment_categories`, 10 rows seeded
+- ✅ Products (BRD §3.2 step 5) — `master_data_products`, 11 rows seeded
+- ✅ Services (BRD §3.2 step 5) — `master_data_services`, 10 rows seeded
+- ✅ Brands (BRD §3.2 step 5) — `master_data_brands`, 15 rows seeded
+- ✅ Account types (BRD §3.1 step 5) — `master_data_account_types`, 12 rows seeded
 - ❌ Urgency levels (1–9) for Priority Ranker
 - ❌ Cash-flow item categories
 - ❌ Net-worth account-entry types
 - ❌ Risk-profile questions/answers/point values (logic exists but not DB-driven)
 - ❌ Advisor types / specializations taxonomy
 
-Calculators currently hard-code these structures; BRD assumes admin-configurable.
+Five domains landed 2026-05-13. **Admin CRUD UI for these tables is the open follow-up** — currently seeded via [`database/seed-master-data.ts`](../../database/seed-master-data.ts), an admin page at `/admin/master-data` is the next batch's job. Existing seeds are idempotent (upsert by slug, never overwrite admin-edited names, never reactivate deactivated rows).
 
 ---
 
@@ -285,6 +287,7 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §9 Master-data foundation (5 of 8 domains ❌ → ✅): investment categories, products, services, brands, account types. New Prisma models all sharing the same shape (slug + name + description + sortOrder + isActive). Migration `20260513240000_master_data`. Seeded via [`database/seed-master-data.ts`](../../database/seed-master-data.ts) — idempotent, never overwrites admin-edited names or reactivates deactivated rows. No admin CRUD UI yet (deferred per design call; the seed script is the operational entry point for now). Foundation for §3 investor-interests + advisor-products/services/brands work that follows.
 - **2026-05-13** — §2 Phone OTP verification (❌ → ✅). New work:
   - `User.phoneNumber` + `User.phoneVerifiedAt` columns (Prisma migration `20260513230200_phone_verification`)
   - `PhoneVerificationOtp` table — same shape as email-OTP (SHA-256 hash, 5-attempt cap, 10-min TTL, per-user uniqueness via deleteMany before each send)
