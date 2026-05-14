@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§2 Auth/onboarding green; master-data foundation for §3 + §9 landed)
+**Last Updated**: 2026-05-13 (§2 Auth and §3 Profiles both fully green; master-data foundation for §9 landed)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -73,7 +73,7 @@ This is a living document. Whenever work ships that moves a row's status:
 | Basic profile (name/phone/email) | ✅ | `investor_profiles` |
 | Risk questionnaire | ✅ | Risk Profiler calc; result persisted on profile |
 | Investment interests / categories | ✅ | `investor_investment_interests` M:N to `master_data_investment_categories`. Multi-select picker on the investor profile page; full-replace PUT semantics on save. |
-| **Financial accounts setup** | ❌ | Not implemented |
+| Financial accounts setup | ✅ | `investor_financial_accounts` M:N to `master_data_account_types` with optional `institution_name`. NO balance fields by design (BRD §8.5 data minimisation). Add/remove rows on the investor profile page. |
 
 ### Advisor (BRD §3.2)
 
@@ -287,6 +287,7 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §3 Investor financial accounts (❌ → ✅, BRD §3.1 step 5). New `investor_financial_accounts` table M:N to `master_data_account_types` with optional `institution_name`. Migration `20260513240500_investor_financial_accounts`. **No balance/amount fields** — Bloomkite is an advisor-discovery platform, not a portfolio tracker, and BRD §8.5 (data minimisation) forbids capturing data we don't need. New [GET/PUT /api/investors/financial-accounts](../../app/api/investors/financial-accounts/route.ts) endpoint — full-replace PUT semantics; the same `account_type` can appear multiple times with different institution names (one HDFC savings + one ICICI savings). UI: a new "Financial Accounts" section on [/profile/investor](../../app/profile/investor/page.tsx) with add/remove rows, each row picking an account type from the master-data dropdown + optional institution-name text input. **§3 Profiles is now fully green** — both investor and advisor rows.
 - **2026-05-13** — §3 Investor investment interests (❌ → ✅, BRD §3.1 step 4). New `investor_investment_interests` join table M:N to `master_data_investment_categories`. Migration `20260513240400_investor_interests`. New [GET/PUT /api/investors/interests](../../app/api/investors/interests/route.ts) endpoint with full-replace semantics + dedup. Multi-select checkbox card on [/profile/investor](../../app/profile/investor/page.tsx) — no ranking (every interest equal weight per spec).
 - **2026-05-13** — §3 Advisor Products / Services / Brands + priority ranking (❌ → ✅ both rows, BRD §3.2 steps 5+6). Three new join tables (`advisor_products`, `advisor_services`, `advisor_brands`) referencing master_data; `priority` Int on products + services only (BRD §3.2 step 6 ranks those two, not brands). Migration `20260513240300_advisor_psb`. New endpoints: [GET/PUT /api/advisors/declarations](../../app/api/advisors/declarations/route.ts) (full-replace semantics — payload is canonical state, omit a row to remove it), [GET /api/master-data/:domain](../../app/api/master-data/[domain]/route.ts) for the picker dropdowns. Profile UI has a new "Products, Services & Brands" card with ordered-list ↑/↓ controls for the two ranked dimensions. Legacy `advisor_expertise` free-text-tag table left intact for now — cleanup commit to drop pending after data check.
 - **2026-05-13** — §3 Advisor credentials four-class split (🟡 → ✅, BRD §3.2 step 4). Added `credentialClass` discriminator (CERTIFICATION | AWARD | EDUCATION | EXPERIENCE) + class-specific nullable fields (`award_year` for AWARD/EDUCATION, `start_date`/`end_date` for EXPERIENCE) on `advisor_credentials`. Migration `20260513240200_advisor_credential_class` backfills existing rows with `credentialClass='CERTIFICATION'` via DEFAULT. Route validates required fields per class (license_number + expiry_date for CERTIFICATION; award_year for AWARD/EDUCATION; start_date for EXPERIENCE). Profile page renders a class picker + per-class form fields. Single moderation queue retained — admin still reviews everything via one /admin/credentials route, badge labels render the class.

@@ -36,6 +36,21 @@ export default function InvestorProfilePage() {
   const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([])
   const [savingInterests, setSavingInterests] = useState(false)
 
+  // BRD §3.1 step 5 — financial accounts setup. The user picks types they
+  // hold and optionally tags an institution name. NO balances captured.
+  type AccountTypeRow = { id: string; slug: string; name: string }
+  type DraftAccount = {
+    // Local-only id for React keys; the DB row id (when persisted) is captured
+    // in `serverId` so we can render the existing row count.
+    localId: string
+    serverId?: string
+    accountTypeId: string
+    institutionName: string
+  }
+  const [accountTypesCatalog, setAccountTypesCatalog] = useState<AccountTypeRow[]>([])
+  const [accounts, setAccounts] = useState<DraftAccount[]>([])
+  const [savingAccounts, setSavingAccounts] = useState(false)
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -53,10 +68,18 @@ export default function InvestorProfilePage() {
           return
         }
 
-        const [profileResp, catalogResp, interestsResp] = await Promise.allSettled([
+        const [
+          profileResp,
+          catalogResp,
+          interestsResp,
+          accountTypesResp,
+          accountsResp,
+        ] = await Promise.allSettled([
           fetch('/api/investors/profile'),
           fetch('/api/master-data/investment-categories'),
           fetch('/api/investors/interests'),
+          fetch('/api/master-data/account-types'),
+          fetch('/api/investors/financial-accounts'),
         ])
 
         if (profileResp.status === 'fulfilled' && profileResp.value.ok) {
@@ -81,6 +104,23 @@ export default function InvestorProfilePage() {
           const j = await interestsResp.value.json()
           setSelectedInterestIds(
             (j.data || []).map((r: { categoryId: string }) => r.categoryId),
+          )
+        }
+        if (accountTypesResp.status === 'fulfilled' && accountTypesResp.value.ok) {
+          const j = await accountTypesResp.value.json()
+          setAccountTypesCatalog(j.data || [])
+        }
+        if (accountsResp.status === 'fulfilled' && accountsResp.value.ok) {
+          const j = await accountsResp.value.json()
+          setAccounts(
+            (j.data || []).map(
+              (a: { id: string; accountTypeId: string; institutionName: string | null }) => ({
+                localId: a.id,
+                serverId: a.id,
+                accountTypeId: a.accountTypeId,
+                institutionName: a.institutionName || '',
+              }),
+            ),
           )
         }
       } catch (err) {
@@ -117,6 +157,57 @@ export default function InvestorProfilePage() {
     setSelectedInterestIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     )
+  }
+
+  const addAccountRow = () => {
+    if (accountTypesCatalog.length === 0) return
+    setAccounts((prev) => [
+      ...prev,
+      {
+        localId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        accountTypeId: accountTypesCatalog[0].id,
+        institutionName: '',
+      },
+    ])
+  }
+
+  const updateAccountRow = (localId: string, patch: Partial<DraftAccount>) => {
+    setAccounts((prev) => prev.map((a) => (a.localId === localId ? { ...a, ...patch } : a)))
+  }
+
+  const removeAccountRow = (localId: string) => {
+    setAccounts((prev) => prev.filter((a) => a.localId !== localId))
+  }
+
+  const handleSaveAccounts = async () => {
+    // Reject empty accountTypeIds — could happen if catalog hadn't loaded
+    // when a row was added. Better to surface than to silently drop.
+    const invalid = accounts.find((a) => !a.accountTypeId)
+    if (invalid) {
+      addToast('Pick an account type for every row', 'error')
+      return
+    }
+    setSavingAccounts(true)
+    try {
+      const resp = await fetch('/api/investors/financial-accounts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accounts: accounts.map((a) => ({
+            accountTypeId: a.accountTypeId,
+            institutionName: a.institutionName.trim() || null,
+          })),
+        }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}))
+        addToast(data.error || 'Failed to save accounts', 'error')
+        return
+      }
+      addToast('Financial accounts saved', 'success')
+    } finally {
+      setSavingAccounts(false)
+    }
   }
 
   const handleSave = async () => {
@@ -331,6 +422,92 @@ export default function InvestorProfilePage() {
               ? 'Saving...'
               : `Save ${selectedInterestIds.length} selected`}
           </button>
+        </section>
+
+        {/* BRD §3.1 step 5 — Financial accounts (types only, no balances) */}
+        <section className="card p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Financial Accounts</h2>
+          <p className="text-sm text-gray-600 mb-2">
+            Which kinds of accounts do you hold? Optionally tag the institution. We never
+            ask for balances or account numbers.
+          </p>
+          <p className="text-xs text-gray-500 mb-6">
+            This helps us match you with advisors who work with the products you already have.
+          </p>
+
+          {accounts.length > 0 ? (
+            <div className="space-y-3 mb-4">
+              {accounts.map((a) => (
+                <div
+                  key={a.localId}
+                  className="grid md:grid-cols-[1fr_1fr_auto] gap-3 items-end"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Account type
+                    </label>
+                    <select
+                      value={a.accountTypeId}
+                      onChange={(e) =>
+                        updateAccountRow(a.localId, { accountTypeId: e.target.value })
+                      }
+                      className="input-modern w-full"
+                    >
+                      {accountTypesCatalog.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Institution (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={a.institutionName}
+                      onChange={(e) =>
+                        updateAccountRow(a.localId, { institutionName: e.target.value })
+                      }
+                      placeholder="e.g. HDFC Bank"
+                      className="input-modern w-full"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeAccountRow(a.localId)}
+                    className="btn-secondary py-2 px-3 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic mb-4">
+              No accounts declared yet. Add one or skip for now.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={addAccountRow}
+              disabled={accountTypesCatalog.length === 0}
+              className="btn-secondary py-2 px-4"
+            >
+              + Add Account
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAccounts}
+              disabled={savingAccounts}
+              className="btn-primary py-2 px-4"
+            >
+              {savingAccounts ? 'Saving...' : 'Save Accounts'}
+            </button>
+          </div>
         </section>
 
         <section className="card p-8">

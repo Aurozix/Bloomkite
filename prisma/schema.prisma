@@ -283,7 +283,6 @@ model AdvisorBrand {
 /// Bank Savings, Brokerage, Mutual Funds, PPF, EPF, NPS, Insurance.
 /// We deliberately capture only WHICH types the investor holds, not balances
 /// or amounts — BRD §8.5 data minimisation.
-/// Back-relation to InvestorFinancialAccount is added in the financial-accounts commit.
 model MasterDataAccountType {
   id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   slug        String   @unique @db.VarChar(80)
@@ -294,8 +293,29 @@ model MasterDataAccountType {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  investorFinancialAccounts InvestorFinancialAccount[]
+
   @@index([sortOrder, name], map: "idx_md_account_type_order")
   @@map("master_data_account_types")
+}
+
+/// Investor financial accounts (BRD §3.1 step 5).
+///
+/// One row per account-type-and-optional-institution. Deliberately NO
+/// balance/amount fields — BRD §8.5 data minimisation, and Bloomkite is an
+/// advisor-discovery platform not a portfolio tracker. Multiple rows allowed
+/// for the same accountType (e.g. two different banks).
+model InvestorFinancialAccount {
+  id              String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  accountTypeId   String   @map("account_type_id") @db.Uuid
+  institutionName String?  @map("institution_name") @db.VarChar(200)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  accountType MasterDataAccountType @relation(fields: [accountTypeId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_inv_fin_acct_user")
+  @@map("investor_financial_accounts")
 }
 
 /// 6-digit OTP codes for phone verification. Same hash + attempts pattern as
