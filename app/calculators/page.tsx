@@ -18,6 +18,8 @@ import {
   ReceiptPercentIcon,
   ArrowsRightLeftIcon,
   PresentationChartLineIcon,
+  Squares2X2Icon,
+  BuildingLibraryIcon,
 } from '@heroicons/react/24/outline'
 
 interface Calculator {
@@ -28,7 +30,31 @@ interface Calculator {
   path: string
 }
 
-const calculators: Calculator[] = [
+// Consolidated calculators are the recommended entry points — they answer
+// every question a borrower or investor really has, and the page itself
+// teaches the principles behind each answer. The individual calculators
+// remain available for power users or for embedding in saved plans, but
+// the consolidated pages are where most users should start.
+const consolidatedCalculators: Calculator[] = [
+  {
+    id: 'consolidated',
+    name: 'Plan your money',
+    description:
+      'Future value, required SIP, required return, required tenure — one canvas that answers the four questions every investor really has',
+    icon: Squares2X2Icon,
+    path: '/calculators/consolidated',
+  },
+  {
+    id: 'loans-consolidated',
+    name: 'Plan your loan',
+    description:
+      'EMI, capacity, prepayment impact, EMI change, rate change — everything a borrower needs in one walkthrough',
+    icon: BuildingLibraryIcon,
+    path: '/calculators/loans-consolidated',
+  },
+]
+
+const individualCalculators: Calculator[] = [
   {
     id: 'goal-planner',
     name: 'Goal Planner',
@@ -138,7 +164,7 @@ const calculators: Calculator[] = [
 
 export default function Calculators() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -167,62 +193,99 @@ export default function Calculators() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-12 w-12 border-4 border-gray-300 border-t-blue-500 rounded-full"></div>
+        <div className="animate-spin h-12 w-12 border-4 border-ink-100 border-t-forest-400 rounded-full"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-paper py-12 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-12">
-          <a href="/dashboard" className="text-blue-600 hover:text-blue-700 font-semibold mb-6 inline-block">
+          <a
+            href="/dashboard"
+            className="text-forest-700 hover:text-forest-500 font-semibold mb-6 inline-block"
+          >
             ← Back to Dashboard
           </a>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Financial Calculators</h1>
-          <p className="text-xl text-gray-600">
+          <h1 className="font-serif text-4xl text-ink-900 mb-3">Financial Calculators</h1>
+          <p className="text-xl text-ink-600">
             Use our suite of financial planning tools to make better decisions
           </p>
         </div>
 
-        {/* Calculator Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {calculators.map((calc) => {
-            const IconComponent = calc.icon
-            return (
-              <button
-                key={calc.id}
-                onClick={() => router.push(calc.path)}
-                className="card p-6 text-left hover:shadow-lg transition-shadow cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <IconComponent
-                    className="h-10 w-10"
-                    style={{ color: 'var(--primary-600)' }}
-                  />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{calc.name}</h3>
-                <p className="text-gray-600 text-sm mb-4">{calc.description}</p>
-                <div
-                  className="inline-block text-sm font-semibold"
-                  style={{ color: 'var(--primary-600)' }}
+        {/* CONSOLIDATED — top of page, visually distinct. The 2 cards here */}
+        {/* are the recommended entry points: each one consolidates a       */}
+        {/* family of related calculators into a single guided walkthrough. */}
+        <section className="mb-14">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-forest-700">
+              Start here · Consolidated walkthroughs
+            </h2>
+            <span className="text-xs text-ink-400">Recommended</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {consolidatedCalculators.map((calc) => {
+              const IconComponent = calc.icon
+              return (
+                <button
+                  key={calc.id}
+                  onClick={() => router.push(calc.path)}
+                  className="text-left p-8 rounded-bk-lg border-2 border-forest-200 bg-forest-50 hover:border-forest-400 hover:bg-forest-50/80 transition-all shadow-bk-sm cursor-pointer"
                 >
-                  Open Calculator →
-                </div>
-              </button>
-            )
-          })}
-        </div>
+                  <div className="flex items-start justify-between mb-4">
+                    <IconComponent className="h-12 w-12 text-forest-700" />
+                  </div>
+                  <h3 className="text-2xl font-serif text-ink-900 mb-2">{calc.name}</h3>
+                  <p className="text-ink-600 text-sm mb-4 leading-relaxed">{calc.description}</p>
+                  <div className="inline-block text-sm font-semibold text-forest-700">
+                    Open walkthrough →
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* INDIVIDUAL — the underlying single-purpose calculators. Still */}
+        {/* available for users who want a specific tool, but visually     */}
+        {/* less prominent than the consolidated walkthroughs above.       */}
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-400 mb-4">
+            Or pick a single-purpose calculator
+          </h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {individualCalculators.map((calc) => {
+              const IconComponent = calc.icon
+              return (
+                <button
+                  key={calc.id}
+                  onClick={() => router.push(calc.path)}
+                  className="card p-6 text-left hover:shadow-bk-md transition-shadow cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <IconComponent className="h-10 w-10 text-forest-700" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-ink-900 mb-2">{calc.name}</h3>
+                  <p className="text-ink-600 text-sm mb-4">{calc.description}</p>
+                  <div className="inline-block text-sm font-semibold text-forest-700">
+                    Open calculator →
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
 
         {/* Info Section */}
-        <div className="mt-16 card p-8 bg-white">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">About These Calculators</h2>
-          <p className="text-gray-600 mb-4">
+        <div className="mt-16 card p-8">
+          <h2 className="text-2xl font-serif text-ink-900 mb-4">About these calculators</h2>
+          <p className="text-ink-600 mb-4">
             Our financial calculators help you understand your financial situation, set realistic
             goals, and make informed investment decisions.
           </p>
-          <ul className="space-y-2 text-gray-600">
+          <ul className="space-y-2 text-ink-600">
             <li>✓ Easy-to-use tools with clear, actionable results</li>
             <li>✓ Calculations based on standard financial formulas</li>
             <li>✓ Save your results for future reference</li>
