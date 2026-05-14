@@ -392,13 +392,31 @@ model AdvisorProfile {
   @@map("advisor_profiles")
 }
 
+/// Advisor credentials. BRD §3.2 step 4 distinguishes four classes —
+/// Certifications, Awards, Education, Experience. We use one table with a
+/// `credentialClass` discriminator + class-specific nullable fields, not four
+/// separate tables (per 2026-05-13 design call). All existing pre-rollout
+/// rows were certifications; the migration backfills credentialClass to
+/// 'CERTIFICATION' on every existing row.
+///
+/// Field semantics by class:
+///   CERTIFICATION : credentialType=title, issuer, licenseNumber, expiryDate
+///   AWARD         : credentialType=title, issuer=awarding body, awardYear
+///   EDUCATION     : credentialType=degree, issuer=institution, awardYear=grad year
+///   EXPERIENCE    : credentialType=role, issuer=company, startDate, endDate (null = current)
 model AdvisorCredential {
   id              String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
   userId          String    @map("user_id") @db.Uuid
+  credentialClass String    @default("CERTIFICATION") @map("credential_class") @db.VarChar(50)
   credentialType  String    @map("credential_type") @db.VarChar(100)
   issuer          String?   @db.VarChar(255)
   licenseNumber   String?   @map("license_number") @db.VarChar(100)
   expiryDate      DateTime? @map("expiry_date") @db.Date
+  // For AWARD (year of award) and EDUCATION (year of graduation).
+  awardYear       Int?      @map("award_year")
+  // For EXPERIENCE only. endDate is null while the role is current.
+  startDate       DateTime? @map("start_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
   fileUrl         String?   @map("file_url")
   status          String?   @default("pending") @db.VarChar(50)
   rejectionReason String?   @map("rejection_reason")

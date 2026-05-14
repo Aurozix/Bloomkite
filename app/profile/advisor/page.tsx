@@ -5,15 +5,28 @@ import { useRouter } from 'next/navigation'
 import { TrashIcon, CheckCircleIcon, XCircleIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { useToast } from '@/app/components/toast-context'
 
+type CredentialClass = 'CERTIFICATION' | 'AWARD' | 'EDUCATION' | 'EXPERIENCE'
+
 interface Credential {
   id: string
+  credential_class: CredentialClass
   credential_type: string
   issuer: string
-  license_number: string
-  expiry_date: string
+  license_number?: string | null
+  expiry_date?: string | null
+  award_year?: number | null
+  start_date?: string | null
+  end_date?: string | null
   status: 'pending' | 'approved' | 'rejected'
   rejection_reason?: string
   file_url?: string
+}
+
+const CLASS_LABELS: Record<CredentialClass, { title: string; titleFieldLabel: string; issuerFieldLabel: string }> = {
+  CERTIFICATION: { title: 'Certification', titleFieldLabel: 'Certification name', issuerFieldLabel: 'Issuing body' },
+  AWARD: { title: 'Award', titleFieldLabel: 'Award title', issuerFieldLabel: 'Awarded by' },
+  EDUCATION: { title: 'Education', titleFieldLabel: 'Degree / qualification', issuerFieldLabel: 'Institution' },
+  EXPERIENCE: { title: 'Experience', titleFieldLabel: 'Role / designation', issuerFieldLabel: 'Company' },
 }
 
 export default function ProfilePage() {
@@ -41,10 +54,14 @@ export default function ProfilePage() {
 
   // Credentials
   const [credentials, setCredentials] = useState<Credential[]>([])
+  const [credentialClass, setCredentialClass] = useState<CredentialClass>('CERTIFICATION')
   const [credentialType, setCredentialType] = useState('')
   const [issuer, setIssuer] = useState('')
   const [licenseNumber, setLicenseNumber] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
+  const [awardYear, setAwardYear] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // Expertise
@@ -152,8 +169,25 @@ export default function ProfilePage() {
   }
 
   const handleUploadCredential = async () => {
-    if (!credentialType || !issuer || !licenseNumber || !expiryDate) {
-      addToast('Please fill all credential fields', 'error')
+    // Class-aware client-side validation. Server validates again — this is
+    // just for fast feedback.
+    if (!credentialType || !issuer) {
+      addToast('Title and issuer are required', 'error')
+      return
+    }
+    if (credentialClass === 'CERTIFICATION' && (!licenseNumber || !expiryDate)) {
+      addToast('Certifications need a license number and expiry date', 'error')
+      return
+    }
+    if ((credentialClass === 'AWARD' || credentialClass === 'EDUCATION') && !awardYear) {
+      addToast(
+        credentialClass === 'AWARD' ? 'Year of award is required' : 'Year of graduation is required',
+        'error',
+      )
+      return
+    }
+    if (credentialClass === 'EXPERIENCE' && !startDate) {
+      addToast('Start date is required', 'error')
       return
     }
 
@@ -177,17 +211,26 @@ export default function ProfilePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          credential_class: credentialClass,
           credential_type: credentialType,
           issuer,
-          license_number: licenseNumber,
-          expiry_date: expiryDate,
+          ...(credentialClass === 'CERTIFICATION'
+            ? { license_number: licenseNumber, expiry_date: expiryDate }
+            : {}),
+          ...(credentialClass === 'AWARD' || credentialClass === 'EDUCATION'
+            ? { award_year: Number(awardYear) }
+            : {}),
+          ...(credentialClass === 'EXPERIENCE'
+            ? { start_date: startDate, end_date: endDate || null }
+            : {}),
           file_base64: fileBase64,
           file_name: fileName,
         }),
       })
 
       if (!response.ok) {
-        addToast('Failed to upload credential', 'error')
+        const data = await response.json().catch(() => ({}))
+        addToast(data.error || 'Failed to upload credential', 'error')
         return
       }
 
@@ -195,11 +238,14 @@ export default function ProfilePage() {
       setCredentials([...credentials, data.data])
       addToast(data.message, 'success')
 
-      // Reset form
+      // Reset all class-specific fields
       setCredentialType('')
       setIssuer('')
       setLicenseNumber('')
       setExpiryDate('')
+      setAwardYear('')
+      setStartDate('')
+      setEndDate('')
       setSelectedFile(null)
     } catch (error) {
       console.error('Error uploading credential:', error)
@@ -391,80 +437,190 @@ export default function ProfilePage() {
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Credentials</h3>
               <div className="space-y-3">
-                {credentials.map((cred) => (
-                  <div key={cred.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-bold text-gray-900">{cred.credential_type}</p>
-                        <p className="text-gray-600 text-sm">{cred.issuer}</p>
-                        <p className="text-gray-500 text-sm">License: {cred.license_number}</p>
-                        <p className="text-gray-500 text-sm">
-                          Expires: {new Date(cred.expiry_date).toLocaleDateString()}
-                        </p>
-                        {cred.rejection_reason && (
-                          <p className="text-red-600 text-sm mt-2">Reason: {cred.rejection_reason}</p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {getStatusBadge(cred.status)}
-                        {cred.file_url && (
-                          <a href={cred.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-sm">
-                            View File
-                          </a>
-                        )}
+                {credentials.map((cred) => {
+                  const cls = (cred.credential_class || 'CERTIFICATION') as CredentialClass
+                  const labels = CLASS_LABELS[cls]
+                  return (
+                    <div key={cred.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                            {labels.title}
+                          </p>
+                          <p className="font-bold text-gray-900">{cred.credential_type}</p>
+                          <p className="text-gray-600 text-sm">{cred.issuer}</p>
+                          {cls === 'CERTIFICATION' && (
+                            <>
+                              {cred.license_number && (
+                                <p className="text-gray-500 text-sm">License: {cred.license_number}</p>
+                              )}
+                              {cred.expiry_date && (
+                                <p className="text-gray-500 text-sm">
+                                  Expires: {new Date(cred.expiry_date).toLocaleDateString()}
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {(cls === 'AWARD' || cls === 'EDUCATION') && cred.award_year && (
+                            <p className="text-gray-500 text-sm">
+                              {cls === 'AWARD' ? 'Year' : 'Graduated'}: {cred.award_year}
+                            </p>
+                          )}
+                          {cls === 'EXPERIENCE' && cred.start_date && (
+                            <p className="text-gray-500 text-sm">
+                              {new Date(cred.start_date).toLocaleDateString()} —{' '}
+                              {cred.end_date
+                                ? new Date(cred.end_date).toLocaleDateString()
+                                : 'Present'}
+                            </p>
+                          )}
+                          {cred.rejection_reason && (
+                            <p className="text-red-600 text-sm mt-2">
+                              Reason: {cred.rejection_reason}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          {getStatusBadge(cred.status)}
+                          {cred.file_url && (
+                            <a
+                              href={cred.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 text-sm"
+                            >
+                              View File
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
 
           <div className="border-t pt-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Credential</h3>
+
+            {/* Class selector — picks which form fields to render below */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(Object.keys(CLASS_LABELS) as CredentialClass[]).map((cls) => (
+                <button
+                  key={cls}
+                  type="button"
+                  onClick={() => setCredentialClass(cls)}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                    credentialClass === cls
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {CLASS_LABELS[cls].title}
+                </button>
+              ))}
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Credential Type</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  {CLASS_LABELS[credentialClass].titleFieldLabel}
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g., CFP, CFA, MBA"
                   className="input-modern w-full"
                   value={credentialType}
                   onChange={(e) => setCredentialType(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Issuer</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  {CLASS_LABELS[credentialClass].issuerFieldLabel}
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g., FPSB India"
                   className="input-modern w-full"
                   value={issuer}
                   onChange={(e) => setIssuer(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">License Number</label>
-                <input
-                  type="text"
-                  className="input-modern w-full"
-                  value={licenseNumber}
-                  onChange={(e) => setLicenseNumber(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Expiry Date</label>
-                <input
-                  type="date"
-                  className="input-modern w-full"
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                />
-              </div>
+
+              {credentialClass === 'CERTIFICATION' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      License Number
+                    </label>
+                    <input
+                      type="text"
+                      className="input-modern w-full"
+                      value={licenseNumber}
+                      onChange={(e) => setLicenseNumber(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      className="input-modern w-full"
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {(credentialClass === 'AWARD' || credentialClass === 'EDUCATION') && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {credentialClass === 'AWARD' ? 'Year of Award' : 'Year of Graduation'}
+                  </label>
+                  <input
+                    type="number"
+                    min={1900}
+                    max={new Date().getFullYear() + 1}
+                    className="input-modern w-full"
+                    value={awardYear}
+                    onChange={(e) => setAwardYear(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {credentialClass === 'EXPERIENCE' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      className="input-modern w-full"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      End Date (leave blank if current)
+                    </label>
+                    <input
+                      type="date"
+                      className="input-modern w-full"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Certificate (PDF)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Supporting Document (PDF, optional)
+              </label>
               <input
                 type="file"
                 accept=".pdf"
@@ -479,7 +635,7 @@ export default function ProfilePage() {
               disabled={uploadingFile}
               className="btn-primary w-full py-3 text-lg"
             >
-              {uploadingFile ? 'Uploading...' : 'Add Credential'}
+              {uploadingFile ? 'Uploading...' : `Add ${CLASS_LABELS[credentialClass].title}`}
             </button>
           </div>
         </div>
