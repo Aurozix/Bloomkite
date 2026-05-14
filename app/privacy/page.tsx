@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 
 import { PageShell } from '@/app/components/PageShell'
 import { PageHeader } from '@/app/components/PageHeader'
+import { canonicalUrl } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Bloomkite',
+  title: 'Privacy Policy',
   description:
     'How Bloomkite collects, uses, retains, and safeguards your personal and financial data.',
+  alternates: { canonical: canonicalUrl('/privacy') },
 }
 
 // Skeleton Privacy Policy — DRAFT, awaiting legal review. Structure covers

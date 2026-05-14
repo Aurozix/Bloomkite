@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 
 import { PageShell } from '@/app/components/PageShell'
 import { PageHeader } from '@/app/components/PageHeader'
+import { canonicalUrl } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Bloomkite',
+  title: 'Terms of Service',
   description:
     'Terms of Service for Bloomkite, the verified financial advisor marketplace.',
+  alternates: { canonical: canonicalUrl('/terms') },
 }
 
 // Skeleton ToS — DRAFT, awaiting legal review per BRD §12.5 pre-launch

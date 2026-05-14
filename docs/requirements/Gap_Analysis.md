@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§11 Compliance & legal fully green at the technical level — ToS + Privacy skeletons (counsel sign-off pending), disclaimers, cookie consent, right-to-delete, KYC, retention jobs, grievance form all shipped)
+**Last Updated**: 2026-05-13 (§13 SEO meta + sitemap + robots landed; per-resource metadata for advisor / article / forum-question detail pages via server-component layouts)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -258,7 +258,7 @@ Per-calculator functional pass against [Calculators_Requirements.md](Calculators
 | Item | Status |
 |---|---|
 | Mobile app | ❌ (BRD Phase 2) |
-| SEO meta / sitemaps | ❌ |
+| SEO meta / sitemaps | ✅ — site-wide OG/Twitter defaults via root layout `metadataBase` + `title.template`, dynamic `app/sitemap.ts` (static + advisors + articles + forum questions), `app/robots.ts` with private-route disallows, per-section + per-resource metadata via server layouts |
 | Analytics / event tracking | ❌ |
 | Error monitoring (Sentry) | ❌ |
 | Email service integration (SendGrid/SES) | ❌ |
@@ -288,6 +288,16 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §13 SEO meta + sitemap + robots (BRD §13). Single piece of cross-cutting infra; full coverage for indexable pages.
+  - **Shared seed**: [`lib/seo.ts`](../../lib/seo.ts) — `SITE_URL` (from `NEXT_PUBLIC_APP_URL` env, fallback `https://bloomkite.app`), `SITE_NAME`, `SITE_DESCRIPTION`, `DEFAULT_OG_IMAGE`, `canonicalUrl(path)`, `truncateForMeta(text, 160)` — single source of truth that the root layout, sitemap, robots, and every per-resource generateMetadata import.
+  - **Root layout** ([app/layout.tsx](../../app/layout.tsx)) extended: `metadataBase` so relative og:image paths resolve, `title.template = '%s · Bloomkite'` so per-page titles compose without each page repeating the brand, full OpenGraph block (type/site/locale=en_IN/image), Twitter card defaults, robots index+follow with `max-snippet:-1`/`max-image-preview:large` for Google.
+  - **`app/robots.ts`**: allow `/`, disallow `/api/`, `/auth/`, `/admin/`, `/settings`, `/plans`, `/advisor/`, `/profile`, `/dashboard`. Sitemap pointer + canonical host included.
+  - **`app/sitemap.ts`**: dynamic, DB-driven. 8 static pages, 15 calculator pages (hard-coded slug list — wire to `master_data_calculator_categories` once that's authoritative), then parallel queries for approved+verified advisors (max 5000), published articles (max 10000), open forum questions (max 10000). Each query has `.catch(() => [])` so one slow query can't block the whole sitemap.
+  - **Per-section default metadata** via new server layouts at [app/advisors/layout.tsx](../../app/advisors/layout.tsx), [app/articles/layout.tsx](../../app/articles/layout.tsx), [app/forum/layout.tsx](../../app/forum/layout.tsx), [app/support/layout.tsx](../../app/support/layout.tsx); existing [app/calculators/layout.tsx](../../app/calculators/layout.tsx) extended with metadata. Each sets section-appropriate title/description/canonical and inherits OG defaults from root.
+  - **Per-resource dynamic metadata** via `[id]/layout.tsx` `generateMetadata` for the three highest-SEO-value page types: [advisor detail](../../app/advisors/[id]/layout.tsx) (advisor name + company + city + bio excerpt; `og:type=profile`), [article detail](../../app/articles/[id]/layout.tsx) (`og:type=article` with publishedTime/modifiedTime/author/tags + featured image as og:image when present), [forum question detail](../../app/forum/questions/[id]/layout.tsx) (title + content excerpt; closed/locked questions are `noindex`). All three layouts are server components — the page itself stays a client component for interactivity, the layout is the only seam Next.js gives us for dynamic metadata on a client page.
+  - The 3 dynamic-resource layouts also handle the missing/unpublished case by returning `robots: noindex` so search engines don't surface stub pages while the data isn't public.
+  - Verified: type-check clean, 297/297 unit tests pass.
+  - **Open follow-ups**: per-resource JSON-LD structured data (FinancialService for advisor profiles, Article for articles, QAPage for forum threads) — significant boost to rich-results eligibility, but each requires a small server-component embed in the page tree; deferred. Brand `og-default.png` asset needs to be uploaded to `/public/og-default.png` (1200×630).
 - **2026-05-13** — §11 Compliance & legal — 8 of 8 remaining capabilities ❌ → ✅ (audit log was already done in §8). The pre-launch checklist is now technically complete; the only outstanding work is qualified-counsel sign-off on the ToS + Privacy text and external scheduler wiring for the retention jobs.
   - **Schema** (migration `20260514035940_compliance_legal`): three new tables. `data_deletion_requests` (workflow PENDING → APPROVED → COMPLETED, with REJECTED leaf; reviewer FK NoAction so the audit trail survives the user delete; the request row itself cascades with the user but the canonical record lives in `admin_audit`). `kyc_records` (one per user; PAN + Aadhaar stored as SHA-256 hash + last-4 only, raw IDs never persisted; status PENDING/VERIFIED/REJECTED). `support_requests` (public submission; userId nullable so anonymous visitors can reach support). AdminAuditAction union extended with 9 new compliance verbs.
   - **Static pages**: [/terms](../../app/terms/page.tsx) and [/privacy](../../app/privacy/page.tsx) — skeleton structure aligned with BRD §12 + §13 requirements + industry SaaS templates. Both carry a prominent DRAFT banner explicitly stating "pending qualified Indian legal counsel review" — these go live as final policy only after counsel sign-off. The Privacy Policy enumerates the third-party processors (Razorpay, Resend, Supabase Storage, Google OAuth) and the BRD §13.3 retention windows verbatim.
