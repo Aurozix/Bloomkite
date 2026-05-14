@@ -12,6 +12,10 @@ import {
   CurrencyRupeeIcon,
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
+  TrashIcon,
+  IdentificationIcon,
+  LifebuoyIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { ColorSchemeSelector } from '@/app/components/color-scheme-selector'
 import { useToast } from '@/app/components/toast-context'
@@ -192,6 +196,30 @@ export default function AdminPage() {
               icon={<ClipboardDocumentListIcon className="h-12 w-12" />}
               title="Audit log"
               body="Append-only compliance trail of every admin action (BRD §8.5 + §13.2)."
+            />
+            <AdminCard
+              href="/admin/data-deletion"
+              icon={<TrashIcon className="h-12 w-12" />}
+              title="Right-to-delete"
+              body="Review user-initiated deletion requests (BRD §13.3)."
+            />
+            <AdminCard
+              href="/admin/kyc"
+              icon={<IdentificationIcon className="h-12 w-12" />}
+              title="KYC verification"
+              body="Verify PAN / Aadhaar submissions. Hashes + last-4 only — full IDs never stored."
+            />
+            <AdminCard
+              href="/admin/support"
+              icon={<LifebuoyIcon className="h-12 w-12" />}
+              title="Support / grievance"
+              body="Triage user-submitted requests (BRD §12.5)."
+            />
+            <AdminCard
+              href="/admin/retention"
+              icon={<ArrowPathIcon className="h-12 w-12" />}
+              title="Retention jobs"
+              body="Manual triggers for the BRD §13.3 purge jobs (OTP / closed-forum / deleted-account residual)."
             />
             <AdminCard
               href="/admin/ai-features"

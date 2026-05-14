@@ -32,6 +32,15 @@ export type AdminAuditAction =
   | 'forum.answer.delete'
   | 'article.bulk_approve'
   | 'article.bulk_reject'
+  | 'data_deletion.approve'
+  | 'data_deletion.reject'
+  | 'data_deletion.complete'
+  | 'kyc.verify'
+  | 'kyc.reject'
+  | 'support.resolve'
+  | 'retention.purge_otps'
+  | 'retention.purge_chat'
+  | 'retention.purge_deleted_accounts'
 
 export interface AdminAuditPayload {
   actorUserId: string
@@ -44,6 +53,10 @@ export interface AdminAuditPayload {
     | 'forum_question'
     | 'forum_answer'
     | 'article'
+    | 'data_deletion_request'
+    | 'kyc_record'
+    | 'support_request'
+    | 'retention_job'
   targetId?: string
   /**
    * Free-form JSON. By convention: `{ before, after }` for state transitions,

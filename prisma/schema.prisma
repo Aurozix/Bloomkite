@@ -68,6 +68,11 @@ model User {
   forumTagsReceived   ForumQuestionAdvisorTag[] @relation("ForumTaggedAdvisor")
   planSharesReceived  PlanShare[]          @relation("PlanSharesReceived")
   planCommentsAuthored PlanComment[]       @relation("PlanCommentsAuthored")
+  dataDeletionRequests DataDeletionRequest[]      @relation("DeletionRequester")
+  reviewedDeletions   DataDeletionRequest[] @relation("DeletionReviewer")
+  kycRecord           KycRecord?
+  supportRequests     SupportRequest[]     @relation("SupportRequester")
+  resolvedSupport     SupportRequest[]     @relation("SupportResolver")
   adminAuditActions   AdminAudit[]         @relation("AdminAuditActor")
   disabler            User?                @relation("UserDisabler", fields: [disabledBy], references: [id], onDelete: NoAction)
   disabledUsers       User[]               @relation("UserDisabler")
@@ -1070,6 +1075,99 @@ model AIFeature {
 
   @@index([category], map: "idx_ai_features_category")
   @@map("ai_features")
+}
+
+// ============================================================================
+// Compliance & legal (BRD §12, §13)
+// ============================================================================
+
+/// User-initiated right-to-delete requests (BRD §13.3). User submits via
+/// /settings; an admin reviews and either approves (which triggers the
+/// existing user.delete admin path) or rejects with a reason. We retain
+/// tax-relevant rows even on hard-delete (invoices, subscriptions, audit
+/// log via NoAction FK on actor) per the 7-year retention window.
+///
+/// status flow:
+///   PENDING   - waiting for admin review
+///   APPROVED  - admin approved; awaiting purge (or auto-purged if config'd)
+///   REJECTED  - admin rejected (reason recorded)
+///   COMPLETED - user record actually deleted (terminal)
+model DataDeletionRequest {
+  id                String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  reason            String?
+  status            String    @default("PENDING") @db.VarChar(20)
+  reviewerId        String?   @map("reviewer_id") @db.Uuid
+  reviewerNote      String?   @map("reviewer_note")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamp(6)
+  completedAt       DateTime? @map("completed_at") @db.Timestamp(6)
+
+  user     User  @relation("DeletionRequester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("DeletionReviewer", fields: [reviewerId], references: [id], onDelete: NoAction)
+
+  @@index([userId, status], map: "idx_data_deletion_user_status")
+  @@index([status, createdAt], map: "idx_data_deletion_status_created")
+  @@map("data_deletion_requests")
+}
+
+/// KYC capture (BRD §12.4). Required for premium tier; optional otherwise.
+/// One row per user. PAN is mandatory for premium gating; Aadhaar is
+/// optional (user choice). We store hashes (SHA-256) NOT plaintext for the
+/// IDs themselves so a DB compromise doesn't leak the actual numbers; the
+/// last 4 digits are kept in clear for support-style "verify with last
+/// four" UX. Verification is admin-driven for now (no automated provider
+/// integration yet).
+model KycRecord {
+  id              String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  userId          String    @unique @map("user_id") @db.Uuid
+  /// SHA-256 of the uppercase PAN (e.g. ABCDE1234F). 64 chars hex.
+  panHash         String    @map("pan_hash") @db.VarChar(64)
+  panLast4        String    @map("pan_last4") @db.VarChar(4)
+  /// SHA-256 of the digits-only Aadhaar (12 chars). Nullable — Aadhaar is
+  /// optional per the BRD.
+  aadhaarHash     String?   @map("aadhaar_hash") @db.VarChar(64)
+  aadhaarLast4    String?   @map("aadhaar_last4") @db.VarChar(4)
+  fullNameOnPan   String?   @map("full_name_on_pan") @db.VarChar(255)
+  status          String    @default("PENDING") @db.VarChar(20)
+  rejectionReason String?   @map("rejection_reason")
+  verifiedById    String?   @map("verified_by_id") @db.Uuid
+  verifiedAt      DateTime? @map("verified_at") @db.Timestamp(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([panHash], map: "idx_kyc_pan_hash")
+  @@index([status], map: "idx_kyc_status")
+  @@map("kyc_records")
+}
+
+/// Grievance / support requests (BRD §12.5). Public submission via /support
+/// with optional auth (so non-signed-in visitors can reach support too).
+/// Admin queue at /admin/support handles the triage.
+model SupportRequest {
+  id           String    @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  /// Null when the submitter wasn't signed in. The contactEmail field is
+  /// the fallback contact channel in that case.
+  userId       String?   @map("user_id") @db.Uuid
+  contactName  String    @map("contact_name") @db.VarChar(150)
+  contactEmail String    @map("contact_email") @db.VarChar(255)
+  category     String    @db.VarChar(50)
+  subject      String    @db.VarChar(300)
+  body         String
+  status       String    @default("OPEN") @db.VarChar(20)
+  resolverId   String?   @map("resolver_id") @db.Uuid
+  resolverNote String?   @map("resolver_note")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamp(6)
+
+  user     User? @relation("SupportRequester", fields: [userId], references: [id], onDelete: SetNull)
+  resolver User? @relation("SupportResolver", fields: [resolverId], references: [id], onDelete: NoAction)
+
+  @@index([status, createdAt], map: "idx_support_status_created")
+  @@index([userId], map: "idx_support_user")
+  @@map("support_requests")
 }
 
 // ============================================================================

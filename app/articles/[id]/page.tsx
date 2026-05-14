@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import RemarkGfm from 'remark-gfm'
 import { UserIcon, CheckBadgeIcon } from '@heroicons/react/24/outline'
 import { useToast } from '@/app/components/toast-context'
+import { FinancialDisclaimer } from '@/app/components/FinancialDisclaimer'
 
 interface Article {
   id: string
@@ -147,6 +148,9 @@ export default function ArticlePage() {
         <a href="/articles" className="text-blue-600 hover:text-blue-700 font-semibold mb-6 inline-block">
           ← Back to Articles
         </a>
+
+        {/* BRD §8.3 / §12.2 — required disclaimer above any financial content. */}
+        <FinancialDisclaimer variant="article" />
 
         {/* Featured Image */}
         {article.featured_image_url && (

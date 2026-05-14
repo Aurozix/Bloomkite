@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§9 Master-data fully green — all calculator + advisor-side reference data now DB-driven and admin-editable; risk profiler questionnaire moved out of code)
+**Last Updated**: 2026-05-13 (§11 Compliance & legal fully green at the technical level — ToS + Privacy skeletons (counsel sign-off pending), disclaimers, cookie consent, right-to-delete, KYC, retention jobs, grievance form all shipped)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -213,21 +213,21 @@ BRD repeatedly references master-data tables. Status:
 
 ---
 
-## 11. Compliance & legal — pre-launch blockers
+## 11. Compliance & legal — fully landed (legal copy still requires counsel sign-off)
 
 Per BRD §12.5 / §7.2:
 
 | Item | Status |
 |---|---|
-| Terms of Service page | ❌ |
-| Privacy Policy page | ❌ |
-| Disclaimer banner on financial content | ❌ |
-| Cookie/consent banner | ❌ |
-| Data deletion request flow (right-to-delete) | ❌ |
-| KYC capture for premium (optional but recommended) | ❌ |
-| Audit trail / activity log table | ❌ |
-| Data-retention purge jobs (7yr / 90d / 24h windows BRD §13.3) | ❌ |
-| Grievance/support contact mechanism | ❌ |
+| Terms of Service page | ✅ — at [/terms](../../app/terms/page.tsx); skeleton with DRAFT banner pending counsel review |
+| Privacy Policy page | ✅ — at [/privacy](../../app/privacy/page.tsx); skeleton with DRAFT banner pending counsel review |
+| Disclaimer banner on financial content | ✅ — [`<FinancialDisclaimer>`](../../app/components/FinancialDisclaimer.tsx) wired via [calculators layout](../../app/calculators/layout.tsx) (covers all 15 calculators) and on [article detail](../../app/articles/[id]/page.tsx) |
+| Cookie/consent banner | ✅ — [`<CookieConsent>`](../../app/components/CookieConsent.tsx) granular: essential / analytics / marketing; persists in localStorage + `bk_cookie_consent` cookie |
+| Data deletion request flow (right-to-delete) | ✅ — user submits at [/settings](../../app/settings/page.tsx); admin reviews at [/admin/data-deletion](../../app/admin/data-deletion/page.tsx) (approve/reject/complete); audit row written before cascade |
+| KYC capture for premium (optional but recommended) | ✅ — capture at [/settings](../../app/settings/page.tsx) with PAN + optional Aadhaar; SHA-256 hash + last-4 stored, raw IDs never persisted; admin verifies at [/admin/kyc](../../app/admin/kyc/page.tsx) |
+| Audit trail / activity log table | ✅ — `AdminAudit` table populated since launch; viewer at [/admin/audit-log](../../app/admin/audit-log/page.tsx) (landed in §8) |
+| Data-retention purge jobs (7yr / 90d / 24h windows BRD §13.3) | ✅ — [`lib/data-retention.ts`](../../lib/data-retention.ts) implements all three windows; admin manual trigger at [/admin/retention](../../app/admin/retention/page.tsx); cron-friendly script at [`scripts/purge-retention.ts`](../../scripts/purge-retention.ts) (production scheduler wiring is the open item) |
+| Grievance/support contact mechanism | ✅ — public form at [/support](../../app/support/page.tsx) (signed-in or anonymous); admin queue at [/admin/support](../../app/admin/support/page.tsx); footer link visible on every page |
 
 ---
 
@@ -288,6 +288,22 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §11 Compliance & legal — 8 of 8 remaining capabilities ❌ → ✅ (audit log was already done in §8). The pre-launch checklist is now technically complete; the only outstanding work is qualified-counsel sign-off on the ToS + Privacy text and external scheduler wiring for the retention jobs.
+  - **Schema** (migration `20260514035940_compliance_legal`): three new tables. `data_deletion_requests` (workflow PENDING → APPROVED → COMPLETED, with REJECTED leaf; reviewer FK NoAction so the audit trail survives the user delete; the request row itself cascades with the user but the canonical record lives in `admin_audit`). `kyc_records` (one per user; PAN + Aadhaar stored as SHA-256 hash + last-4 only, raw IDs never persisted; status PENDING/VERIFIED/REJECTED). `support_requests` (public submission; userId nullable so anonymous visitors can reach support). AdminAuditAction union extended with 9 new compliance verbs.
+  - **Static pages**: [/terms](../../app/terms/page.tsx) and [/privacy](../../app/privacy/page.tsx) — skeleton structure aligned with BRD §12 + §13 requirements + industry SaaS templates. Both carry a prominent DRAFT banner explicitly stating "pending qualified Indian legal counsel review" — these go live as final policy only after counsel sign-off. The Privacy Policy enumerates the third-party processors (Razorpay, Resend, Supabase Storage, Google OAuth) and the BRD §13.3 retention windows verbatim.
+  - **Financial disclaimer** (BRD §8.3 / §12.2): [`<FinancialDisclaimer>`](../../app/components/FinancialDisclaimer.tsx) component with three variants (default / article / inline). Wired ONCE via a new [calculators layout](../../app/calculators/layout.tsx) so every current and future calculator inherits it automatically — adding a new calculator can't ship without the SEBI-compliant disclaimer. Article detail page renders the article-variant above the content body.
+  - **Cookie consent** (BRD §12.3 / DPDP Act 2023 alignment): [`<CookieConsent>`](../../app/components/CookieConsent.tsx) bottom-bar with three categories (essential, analytics, marketing). Granular customise pane, "Accept all" / "Reject non-essential" shortcuts. Persists choice to localStorage AND a `bk_cookie_consent` cookie (so server-rendered pages can branch on it). 1-year expiry; banner re-prompts if the version constant ever bumps.
+  - **Right-to-delete flow** (BRD §13.3): [POST /api/settings/data-deletion](../../app/api/settings/data-deletion/route.ts) (rejects duplicate PENDING) + [GET /api/settings/data-deletion](../../app/api/settings/data-deletion/route.ts) for the user's request history. [Admin queue](../../app/api/admin/data-deletion/route.ts) + [POST .../[id]](../../app/api/admin/data-deletion/[id]/route.ts) supports approve / reject (with required note) / complete (which actually hard-deletes the user, audited BEFORE the cascade). User-facing UI at [/settings](../../app/settings/page.tsx) with type-the-confirmation flow; admin queue at [/admin/data-deletion](../../app/admin/data-deletion/page.tsx).
+  - **KYC capture** (BRD §12.4): [`lib/kyc.ts`](../../lib/kyc.ts) handles PAN format validation (5 letters + 4 digits + 1 letter, uppercased) and Aadhaar (12 digits, strips spaces). Both produce SHA-256 hashes for matching plus last-4 in plain text for support-style verification — full IDs are never written to the DB. [POST/GET /api/settings/kyc](../../app/api/settings/kyc/route.ts) (upsert; resubmission flips status back to PENDING). [Admin queue](../../app/api/admin/kyc/route.ts) + [verify/reject](../../app/api/admin/kyc/[id]/route.ts). UI sections on [/settings](../../app/settings/page.tsx) and [/admin/kyc](../../app/admin/kyc/page.tsx).
+  - **Data-retention purge jobs** (BRD §13.3): [`lib/data-retention.ts`](../../lib/data-retention.ts) implements all three windows — 24h OTPs (email + phone), 90d closed-forum (admin-locked questions only; open questions are never auto-purged regardless of age), 7yr deleted-account residual (currently a no-op safety net since the COMPLETE deletion path hard-deletes immediately; will activate when a future soft-delete-then-hard-purge two-stage flow lands). Admin manual trigger at [/admin/retention](../../app/admin/retention/page.tsx) writes audit rows with affected counts; cron-friendly [`scripts/purge-retention.ts`](../../scripts/purge-retention.ts) for unattended runs. **Production scheduler wiring is the open follow-up** — Vercel Cron / Supabase Edge / external cron all work; today the admin manual trigger is the fallback.
+  - **Grievance / support** (BRD §12.5): [POST /api/support](../../app/api/support/route.ts) accepts submissions from anonymous AND signed-in users (userId is nullable; signed-in submissions auto-link). Categories cover account, billing, privacy, advisor-issue, content-issue, bug, other. Public form at [/support](../../app/support/page.tsx) pre-fills name/email from session if available. Admin triage at [/admin/support](../../app/admin/support/page.tsx) supports resolve / reopen with optional resolution notes.
+  - **Site-wide footer** (new): [`<Footer>`](../../app/components/Footer.tsx) surfaces Terms / Privacy / Support / Settings on every page, satisfying the BRD §12.5 "grievance contact mechanism must be visible" requirement.
+  - **Admin landing** rebuilt: surfaces all 11 admin sections (was 7).
+  - Verified: type-check clean, 278/278 unit tests pass.
+  - **Three explicit follow-ups (out of scope here):**
+    1. Qualified Indian legal counsel must review the ToS + Privacy DRAFTs and replace the placeholder text before launch. The DRAFT banners make the status unambiguous to anyone who lands on the pages.
+    2. Production scheduler for `scripts/purge-retention.ts` (Vercel Cron / Supabase Edge / external cron) — the lib + admin trigger are ready; only the cron wire-up is missing.
+    3. Premium-tier gate that requires a VERIFIED KYC record before allowing premium subscription checkout — table + verification flow are landed; the checkout-side gate is a separate plumbing task.
 - **2026-05-13** — §9 Master-data — all five remaining sub-tasks ❌ → ✅. The calculator + advisor surfaces are now fully DB-driven and admin-editable; the only hard-coded fallbacks are graceful-degradation defaults that match the seed.
   - **Schema** (migration `20260514034652_reference_data_extensions`): six new tables. Four follow the existing master-data shape (slug+name+description+sortOrder+isActive) and slot into the dispatcher: `master_data_income_categories`, `master_data_expense_categories`, `master_data_asset_types`, `master_data_liability_types`. Two are bespoke for the risk-profile questionnaire: `risk_profile_questions` (with `questionNumber` Decimal preserving the existing 3.1 conditional, `maxScoreForInversion` Int preserving Q3's binary max=0, optional self-FK + answer-score for conditional rendering) and `risk_profile_answers`.
   - **Seed** ([`database/seed-master-data.ts`](../../database/seed-master-data.ts)): extended with urgency-levels (9), income (9), expense (17), assets (15), liabilities (10) — total 60 new rows. New [`database/seed-risk-profile.ts`](../../database/seed-risk-profile.ts) seeds 17 questions + their answer sets via two-pass insert (questions first, conditional FKs second) and is fully idempotent (upsert by slug; answers re-created in lockstep so wording edits propagate).

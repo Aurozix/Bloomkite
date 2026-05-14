@@ -5,6 +5,8 @@ import { ToastProvider } from './components/toast-context'
 import { ToastContainer } from './components/toast-container'
 import { ColorSchemeProvider } from './components/color-scheme-context'
 import { Navbar } from './components/Navbar'
+import { Footer } from './components/Footer'
+import { CookieConsent } from './components/CookieConsent'
 import { Providers } from './providers'
 
 // Bloomkite Brand v1.0 typography — see docs/branding/brand.md §6.
@@ -58,7 +60,9 @@ export default function RootLayout({
               <div className="min-h-screen flex flex-col">
                 <Navbar />
                 <main className="flex-1">{children}</main>
+                <Footer />
               </div>
+              <CookieConsent />
               <ToastContainer />
             </ToastProvider>
           </ColorSchemeProvider>
