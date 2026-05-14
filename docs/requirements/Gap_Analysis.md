@@ -1,6 +1,6 @@
 # Bloomkite — Gap Analysis & Implementation Status
 
-**Last Updated**: 2026-05-13 (§5 Advisor discovery & engagement fully green — faceted filter sidebar, advisor ratings + reviews, forum advisor-tagging with inbox surface; advisor article-tagging deferred to BRD §3.4 follow-up)
+**Last Updated**: 2026-05-13 (§8 Admin fully green — user delete + master-data CRUD + plans editor + forum moderation + audit-log viewer + bulk article moderation; two new master-data domains landed for §9)
 **Sources**: [Business_Requirements.md](Business_Requirements.md), [Calculators_Requirements.md](Calculators_Requirements.md)
 **Purpose**: Living scorecard of BRD/Calculator-spec coverage. Updated every time a feature changes status.
 
@@ -163,19 +163,19 @@ BRD §3.3, §5.3, §11.2 position plan-sharing as the platform's key competitive
 
 ---
 
-## 8. Admin
+## 8. Admin — fully landed
 
 | Feature | Status |
 |---|---|
 | Dashboard stats | ✅ |
 | Article moderation UI | ✅ |
 | Credential approval UI | ✅ |
-| **User management (suspend/delete/role-edit)** | ❌ |
-| **Master data CRUD** (products, services, brands, urgency, calculator categories) | ❌ |
-| **Membership plan editor** | ❌ — plans seeded via SQL only |
-| **Compliance reports / audit log viewer** | ❌ |
-| **Bulk moderation actions** | ❌ |
-| **Forum moderation UI** | ❌ — schema supports it, no admin page |
+| **User management (suspend/delete/role-edit)** | ✅ — list/detail/disable/role-toggle existing; hard-delete added with last-admin guard |
+| **Master data CRUD** (products, services, brands, urgency, calculator categories, etc.) | ✅ — single dispatcher API + CRUD UI across all 7 domains |
+| **Membership plan editor** | ✅ — full CRUD on `subscription_plans`, JSON features blob, soft-deactivate |
+| **Compliance reports / audit log viewer** | ✅ — `AdminAudit` table populated since launch; viewer at `/admin/audit-log` with actor/action/target/date filters |
+| **Bulk moderation actions** | ✅ — articles bulk approve/reject with checkbox selection on existing /admin/content |
+| **Forum moderation UI** | ✅ — list with status filter; lock/unlock/delete question; delete answer with answer-count decrement |
 
 ---
 
@@ -188,13 +188,14 @@ BRD repeatedly references master-data tables. Status:
 - ✅ Services (BRD §3.2 step 5) — `master_data_services`, 10 rows seeded
 - ✅ Brands (BRD §3.2 step 5) — `master_data_brands`, 15 rows seeded
 - ✅ Account types (BRD §3.1 step 5) — `master_data_account_types`, 12 rows seeded
-- ❌ Urgency levels (1–9) for Priority Ranker
+- ✅ Urgency levels (1–9) for Priority Ranker — `master_data_urgency_levels` (table only; calculator wiring is a follow-up)
+- ✅ Calculator categories — `master_data_calculator_categories` (table only; catalog page wiring is a follow-up)
 - ❌ Cash-flow item categories
 - ❌ Net-worth account-entry types
 - ❌ Risk-profile questions/answers/point values (logic exists but not DB-driven)
 - ❌ Advisor types / specializations taxonomy
 
-Five domains landed 2026-05-13. **Admin CRUD UI for these tables is the open follow-up** — currently seeded via [`database/seed-master-data.ts`](../../database/seed-master-data.ts), an admin page at `/admin/master-data` is the next batch's job. Existing seeds are idempotent (upsert by slug, never overwrite admin-edited names, never reactivate deactivated rows).
+Seven of nine master-data domains landed. **Admin CRUD UI is now live at [/admin/master-data](../../app/admin/master-data/page.tsx)** with create / inline-edit / soft-deactivate / reactivate across every domain via a single dispatcher route. Slugs are immutable from the UI (code may hard-code them). The seed script remains the bootstrap entry point; the admin UI is for ongoing maintenance.
 
 ---
 
@@ -287,6 +288,16 @@ If the goal is **MVP launch readiness** per BRD §7.2, in priority order:
 
 ## Changelog
 
+- **2026-05-13** — §8 Admin — 6 of 6 remaining capabilities ❌ → ✅ (BRD §8.5, §13.2 audit; full admin operations surface).
+  - **Schema** (migration `20260514030740_admin_master_data_extensions`): two new master-data tables `master_data_urgency_levels` (Priority Ranker 1..9 scale) and `master_data_calculator_categories`. Both follow the same shape as the other five domains. `lib/admin-master-data.ts` registry maps domain slug → Prisma delegate so a single dispatcher route serves all seven CRUD endpoints. `lib/admin-audit.ts` AdminAuditAction union + targetType union extended with the new admin verbs (`user.delete`, `master_data.*`, `plan.*`, `forum.*`, `article.bulk_*`).
+  - **User management**: existing list/detail/disable/role-toggle stayed. Added [DELETE /api/admin/users/:id](../../app/api/admin/users/[id]/route.ts) with last-admin guard, self-delete guard, and audit-write BEFORE the cascade so the trail survives. UI gained a "Danger zone" card with type-the-email confirm.
+  - **Master-data CRUD**: [GET/POST /api/admin/master-data/:domain](../../app/api/admin/master-data/[domain]/route.ts) (list with inactive included, create) + [PATCH/DELETE/POST?action=reactivate /api/admin/master-data/:domain/:id](../../app/api/admin/master-data/[domain]/[id]/route.ts) (update, soft-deactivate, reactivate). Slugs immutable from the UI — code may hard-code them. UI at [/admin/master-data](../../app/admin/master-data/page.tsx) (domain index) + [/admin/master-data/[domain]](../../app/admin/master-data/[domain]/page.tsx) (inline-edit table with create form, sort-order, status pill, deactivate/reactivate).
+  - **Membership-plan editor**: [POST/GET /api/admin/plans](../../app/api/admin/plans/route.ts) + [PATCH/DELETE /api/admin/plans/:id](../../app/api/admin/plans/[id]/route.ts). DELETE soft-deactivates rather than hard-deletes — live subscriptions FK to plan_id and a hard delete would break billing history. UI at [/admin/plans](../../app/admin/plans/page.tsx) with rupee→paise conversion in the form, JSON features editor, in-place edit.
+  - **Forum moderation**: [GET /api/admin/forum/questions](../../app/api/admin/forum/questions/route.ts) (list with status + search filter, includes closed/locked), [POST/DELETE /api/admin/forum/questions/:id/lock](../../app/api/admin/forum/questions/[id]/lock/route.ts) (lock = `status='closed'`, hides from public forum but preserves history), [DELETE /api/admin/forum/questions/:id](../../app/api/admin/forum/questions/[id]/route.ts) (cascades answers + tags), [DELETE /api/admin/forum/answers/:id](../../app/api/admin/forum/answers/[id]/route.ts) (decrements the question's denormalised `answer_count` in-transaction). UI at [/admin/forum](../../app/admin/forum/page.tsx).
+  - **Audit-log viewer**: [GET /api/admin/audit](../../app/api/admin/audit/route.ts) with filters on actor/action/targetType/targetId/from/to. UI at [/admin/audit-log](../../app/admin/audit-log/page.tsx) — table with collapsible JSON metadata, dropdowns of known actions/target-types pre-populated.
+  - **Bulk article moderation**: [POST /api/admin/articles/bulk](../../app/api/admin/articles/bulk/route.ts) accepts `{action: 'approve'|'reject', ids[], rejectionReason?}`. Pending-only filter on the bulk update so already-published rows are silently skipped (returns `processed`/`skipped`/`requested` counts). Single audit row per bulk op with the id list in metadata. UI: sticky checkbox bar on the existing /admin/content articles tab — select-all toggle, "Approve N" / "Reject N…" with shared rejection reason.
+  - **Admin landing** rebuilt to surface all 7 sections (was 3): content moderation, users, master-data, plans, forum, audit-log, AI features. Reusable `<AdminCard>` extracted inline.
+  - Verified: type-check clean, 278/278 unit tests pass.
 - **2026-05-13** — §5 Advisor discovery & engagement — 3 of 3 remaining rows ❌/🟡 → ✅ (BRD §3.1, §3.4, §7.1).
   - **Schema**: `advisor_ratings` (one per investor↔advisor pair, unique), `forum_question_advisor_tags` (M:N pivot). Denormalised `ratingCount` + `ratingAverage` (Decimal(3,2)) on `advisor_profiles` recomputed in-transaction with every write so the public card is always exact. Added `user` back-relations on `advisor_products` / `advisor_services` / `advisor_brands` so Prisma can filter advisors by joined master-data without raw SQL. New indexes on the three M:N pivots' `<X>_id` columns to make the faceted lookup cheap, plus `idx_advisor_profiles_rating_average` for the "top rated" sort. Migration `20260514025441_discovery_engagement`.
   - **BRD §3.1 step 5 / §5 Filter by products/services/brands** (🟡 → ✅). [GET /api/advisors/search](../../app/api/advisors/search/route.ts) extended to accept repeatable `product`, `service`, `brand` UUIDs plus existing `q`/`city`/`specialization`. AND across dimensions, OR within (matches the affordance the sidebar gives). New `sort=rating` branch uses `(ratingAverage DESC NULLS LAST, ratingCount DESC, createdAt DESC)` so unrated advisors don't outrank mid-rated ones. Faceted sidebar UI on [/advisors](../../app/advisors/page.tsx) with checkbox panels per master-data domain, deep-linkable URL state, and a clear-all action.

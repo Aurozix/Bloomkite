@@ -45,6 +45,86 @@ export default function ContentModeration() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [rejectionReason, setRejectionReason] = useState<Record<string, string>>({})
 
+  // Bulk moderation state. Selection is per-id Set; bulk reject prompts for
+  // a single shared rejection reason that applies to every selected article.
+  const [selectedArticleIds, setSelectedArticleIds] = useState<Set<string>>(new Set())
+  const [bulkRejecting, setBulkRejecting] = useState(false)
+  const [bulkProcessing, setBulkProcessing] = useState(false)
+  const [bulkRejectReason, setBulkRejectReason] = useState('')
+
+  const toggleSelect = (id: string) => {
+    setSelectedArticleIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedArticleIds.size === articles.length) {
+      setSelectedArticleIds(new Set())
+    } else {
+      setSelectedArticleIds(new Set(articles.map((a) => a.id)))
+    }
+  }
+
+  const bulkApprove = async () => {
+    if (selectedArticleIds.size === 0) return
+    setBulkProcessing(true)
+    try {
+      const ids = Array.from(selectedArticleIds)
+      const resp = await fetch('/api/admin/articles/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', ids }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) {
+        addToast(json.error || 'Bulk approve failed', 'error')
+        return
+      }
+      addToast(`Approved ${json.processed} of ${json.requested}`, 'success')
+      setArticles((prev) => prev.filter((a) => !selectedArticleIds.has(a.id)))
+      setSelectedArticleIds(new Set())
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const bulkReject = async () => {
+    if (selectedArticleIds.size === 0) return
+    if (!bulkRejectReason.trim()) {
+      addToast('Provide a rejection reason', 'error')
+      return
+    }
+    setBulkProcessing(true)
+    try {
+      const ids = Array.from(selectedArticleIds)
+      const resp = await fetch('/api/admin/articles/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          ids,
+          rejectionReason: bulkRejectReason.trim(),
+        }),
+      })
+      const json = await resp.json()
+      if (!resp.ok) {
+        addToast(json.error || 'Bulk reject failed', 'error')
+        return
+      }
+      addToast(`Rejected ${json.processed} of ${json.requested}`, 'success')
+      setArticles((prev) => prev.filter((a) => !selectedArticleIds.has(a.id)))
+      setSelectedArticleIds(new Set())
+      setBulkRejecting(false)
+      setBulkRejectReason('')
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -251,14 +331,77 @@ export default function ContentModeration() {
         {/* Articles Tab */}
         {tab === 'articles' && (
           <div className="space-y-4">
+            {articles.length > 0 && (
+              <div className="card p-3 sticky top-0 z-10 bg-paper border-2 border-forest-200 flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-semibold text-forest-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedArticleIds.size === articles.length && articles.length > 0}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4"
+                  />
+                  Select all ({selectedArticleIds.size}/{articles.length})
+                </label>
+                {selectedArticleIds.size > 0 && (
+                  <>
+                    <button
+                      onClick={bulkApprove}
+                      disabled={bulkProcessing}
+                      className="btn-primary px-4 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      Approve {selectedArticleIds.size}
+                    </button>
+                    <button
+                      onClick={() => setBulkRejecting((v) => !v)}
+                      disabled={bulkProcessing}
+                      className="btn-outline px-4 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      Reject {selectedArticleIds.size}…
+                    </button>
+                    <button
+                      onClick={() => setSelectedArticleIds(new Set())}
+                      className="text-sm text-ink-600 hover:underline ml-auto"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+                {bulkRejecting && selectedArticleIds.size > 0 && (
+                  <div className="w-full mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Shared rejection reason (applies to all selected)…"
+                      value={bulkRejectReason}
+                      onChange={(e) => setBulkRejectReason(e.target.value)}
+                      className="input-modern flex-1 text-sm"
+                    />
+                    <button
+                      onClick={bulkReject}
+                      disabled={bulkProcessing || !bulkRejectReason.trim()}
+                      className="btn-outline px-4 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      Confirm reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {articles.length > 0 ? (
               articles.map((article) => (
                 <div key={article.id} className="card p-6">
-                  <div className="mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{article.title}</h3>
-                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                      <span>By {article.author.full_name || article.author.email}</span>
-                      <span>Submitted {formatDate(article.created_at)}</span>
+                  <div className="mb-4 flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedArticleIds.has(article.id)}
+                      onChange={() => toggleSelect(article.id)}
+                      className="h-4 w-4 mt-1.5 flex-shrink-0"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{article.title}</h3>
+                      <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                        <span>By {article.author.full_name || article.author.email}</span>
+                        <span>Submitted {formatDate(article.created_at)}</span>
+                      </div>
                     </div>
                   </div>
 

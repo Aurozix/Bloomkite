@@ -6,9 +6,12 @@ import {
   ShieldCheckIcon,
   UsersIcon,
   DocumentTextIcon,
-  CheckCircleIcon,
   ClockIcon,
   SparklesIcon,
+  TableCellsIcon,
+  CurrencyRupeeIcon,
+  ChatBubbleLeftRightIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline'
 import { ColorSchemeSelector } from '@/app/components/color-scheme-selector'
 import { useToast } from '@/app/components/toast-context'
@@ -154,50 +157,76 @@ export default function AdminPage() {
         <section>
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Operations</h2>
           <div className="grid md:grid-cols-3 gap-6">
-            <a
+            <AdminCard
               href="/admin/content"
-              className="card p-8 hover:shadow-xl transition cursor-pointer group"
-            >
-              <DocumentTextIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform" style={{ color: 'var(--primary-600)' }} />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Content Moderation</h3>
-              <p className="text-gray-600 mb-6">
-                Review and approve pending articles and verify advisor credentials
-              </p>
-              <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition" style={{ color: 'var(--primary-600)' }}>
-                Review Content →
-              </div>
-            </a>
-
-            <a
+              icon={<DocumentTextIcon className="h-12 w-12" />}
+              title="Content moderation"
+              body="Review pending articles (with bulk approve/reject) and advisor credentials."
+            />
+            <AdminCard
               href="/admin/users"
-              className="card p-8 hover:shadow-xl transition cursor-pointer group"
-            >
-              <UsersIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform text-saffron-500" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">User Management</h3>
-              <p className="text-gray-600 mb-6">
-                Search users, assign or remove roles, disable accounts, and review the audit trail.
-              </p>
-              <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition text-forest-500">
-                Manage Users →
-              </div>
-            </a>
-
-            <a
+              icon={<UsersIcon className="h-12 w-12" />}
+              title="User management"
+              body="Search, assign or remove roles, disable accounts, hard-delete on request."
+            />
+            <AdminCard
+              href="/admin/master-data"
+              icon={<TableCellsIcon className="h-12 w-12" />}
+              title="Master data"
+              body="Edit the lookup tables behind profile pickers, calculators, and search facets."
+            />
+            <AdminCard
+              href="/admin/plans"
+              icon={<CurrencyRupeeIcon className="h-12 w-12" />}
+              title="Membership plans"
+              body="Create, edit, deactivate subscription plans (replaces SQL-seeded plans)."
+            />
+            <AdminCard
+              href="/admin/forum"
+              icon={<ChatBubbleLeftRightIcon className="h-12 w-12" />}
+              title="Forum moderation"
+              body="Lock or delete questions and answers. Locks preserve history; deletes cascade."
+            />
+            <AdminCard
+              href="/admin/audit-log"
+              icon={<ClipboardDocumentListIcon className="h-12 w-12" />}
+              title="Audit log"
+              body="Append-only compliance trail of every admin action (BRD §8.5 + §13.2)."
+            />
+            <AdminCard
               href="/admin/ai-features"
-              className="card p-8 hover:shadow-xl transition cursor-pointer group"
-            >
-              <SparklesIcon className="h-16 w-16 mb-4 group-hover:scale-110 transition transform text-forest-500" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">AI Features</h3>
-              <p className="text-gray-600 mb-6">
-                Toggle individual AI features on or off. Every feature is opt-in and ships disabled by default.
-              </p>
-              <div className="flex items-center gap-2 font-semibold group-hover:gap-3 transition text-forest-500">
-                Manage Toggles →
-              </div>
-            </a>
+              icon={<SparklesIcon className="h-12 w-12" />}
+              title="AI features"
+              body="Toggle individual AI features. Every feature is opt-in, off by default."
+            />
           </div>
         </section>
       </main>
     </div>
+  )
+}
+
+function AdminCard({
+  href,
+  icon,
+  title,
+  body,
+}: {
+  href: string
+  icon: React.ReactNode
+  title: string
+  body: string
+}) {
+  return (
+    <a href={href} className="card p-6 hover:shadow-xl transition cursor-pointer group">
+      <div className="text-forest-500 group-hover:scale-110 transition-transform mb-3">
+        {icon}
+      </div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600 text-sm mb-4">{body}</p>
+      <div className="text-sm font-semibold text-forest-500 group-hover:gap-2 inline-flex items-center gap-1 transition-all">
+        Open →
+      </div>
+    </a>
   )
 }

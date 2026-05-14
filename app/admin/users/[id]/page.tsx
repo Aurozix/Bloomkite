@@ -52,6 +52,7 @@ export default function AdminUserDetailPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [confirmDisable, setConfirmDisable] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string>('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,6 +100,27 @@ export default function AdminUserDetailPage() {
       addToast(json.message ?? 'Done', 'success')
       setConfirmDisable(false)
       await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteUser = async () => {
+    if (!user) return
+    if (confirmDelete !== user.email) {
+      addToast('Type the email to confirm', 'error')
+      return
+    }
+    setBusy(true)
+    try {
+      const resp = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+      const json = await resp.json()
+      if (!resp.ok) {
+        addToast(json.error ?? 'Delete failed', 'error')
+        return
+      }
+      addToast(json.message ?? 'User deleted', 'success')
+      router.push('/admin/users')
     } finally {
       setBusy(false)
     }
@@ -258,6 +280,35 @@ export default function AdminUserDetailPage() {
             )}
           </section>
         )}
+
+        {/* Danger zone */}
+        <section className="card p-6 mb-8 border-2 border-red-200">
+          <h2 className="font-serif text-2xl font-medium text-red-700 mb-2">
+            Danger zone
+          </h2>
+          <p className="text-sm text-ink-600 mb-4">
+            Hard-deleting a user removes their account and all owned content (articles,
+            forum posts, plans, ratings). Most relations cascade. This is for genuine
+            data-deletion requests (BRD §13.3 right-to-delete) — for routine offenders,
+            disable instead.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              className="input-modern flex-1 min-w-[240px]"
+              placeholder={`Type ${user.email} to confirm`}
+              value={confirmDelete}
+              onChange={(e) => setConfirmDelete(e.target.value)}
+            />
+            <button
+              onClick={deleteUser}
+              disabled={busy || confirmDelete !== user.email}
+              className="px-4 py-2 rounded-bk-md bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50"
+            >
+              Permanently delete
+            </button>
+          </div>
+        </section>
 
         {/* Audit log */}
         <section className="card p-6">

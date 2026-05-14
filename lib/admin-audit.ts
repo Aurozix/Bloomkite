@@ -16,13 +16,34 @@ export type AdminAuditAction =
   | 'user.enable'
   | 'user.role.add'
   | 'user.role.remove'
+  | 'user.delete'
   | 'ai_feature.create'
   | 'ai_feature.toggle'
+  | 'master_data.create'
+  | 'master_data.update'
+  | 'master_data.deactivate'
+  | 'master_data.reactivate'
+  | 'plan.create'
+  | 'plan.update'
+  | 'plan.delete'
+  | 'forum.question.lock'
+  | 'forum.question.unlock'
+  | 'forum.question.delete'
+  | 'forum.answer.delete'
+  | 'article.bulk_approve'
+  | 'article.bulk_reject'
 
 export interface AdminAuditPayload {
   actorUserId: string
   action: AdminAuditAction
-  targetType?: 'user' | 'ai_feature'
+  targetType?:
+    | 'user'
+    | 'ai_feature'
+    | 'master_data'
+    | 'plan'
+    | 'forum_question'
+    | 'forum_answer'
+    | 'article'
   targetId?: string
   /**
    * Free-form JSON. By convention: `{ before, after }` for state transitions,

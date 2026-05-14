@@ -293,6 +293,41 @@ model AdvisorBrand {
   @@map("advisor_brands")
 }
 
+/// Urgency / priority levels for the Priority Ranker calculator
+/// (BRD Calculators §4 — 1..9 scale). Master-data so an admin can rename
+/// labels without a code deploy.
+model MasterDataUrgencyLevel {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_urgency_order")
+  @@map("master_data_urgency_levels")
+}
+
+/// Calculator categories — admin-editable grouping for the calculators
+/// catalogue. Today calculators are hard-coded under app/calculators/, but
+/// when the admin master-data UI surfaces categories the catalog page can
+/// read its tabs from this table without a deploy.
+model MasterDataCalculatorCategory {
+  id          String   @id @default(dbgenerated("extensions.uuid_generate_v4()")) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(150)
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([sortOrder, name], map: "idx_md_calc_cat_order")
+  @@map("master_data_calculator_categories")
+}
+
 /// Account types an investor can declare in onboarding (BRD §3.1 step 5).
 /// Bank Savings, Brokerage, Mutual Funds, PPF, EPF, NPS, Insurance.
 /// We deliberately capture only WHICH types the investor holds, not balances
